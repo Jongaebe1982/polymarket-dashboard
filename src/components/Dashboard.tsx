@@ -6,6 +6,7 @@ import { RetailerSection, RetailerCompact } from './RetailerSection';
 import { MarketCard, MarketCardSkeleton } from './MarketCard';
 import { StatCard, MarketCountChart } from './PriceChart';
 import { StockTicker } from './StockTicker';
+import { WalmartEarnings } from './WalmartEarnings';
 import { formatVolume, hasSignificantMovement } from '@/lib/polymarket';
 
 interface DashboardData {
@@ -58,7 +59,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'earnings' | 'competitors'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'walmart-earnings' | 'earnings' | 'competitors'>('overview');
   const [showTitleInfo, setShowTitleInfo] = useState(false);
   const [retailFilter, setRetailFilter] = useState<RetailerName | 'all'>('all');
 
@@ -157,9 +158,10 @@ export function Dashboard() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 -mb-px">
+          <div className="flex gap-1 -mb-px overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview', icon: '📈' },
+              { id: 'walmart-earnings', label: 'Walmart Earnings', icon: '🏪' },
               { id: 'earnings', label: 'All Earnings', icon: '💰' },
               { id: 'competitors', label: 'All Retail Markets', icon: '🏬' },
             ].map(tab => (
@@ -284,6 +286,14 @@ export function Dashboard() {
               />
             </section>
           </>
+        )}
+
+        {/* Walmart Earnings Tab */}
+        {activeTab === 'walmart-earnings' && (
+          <WalmartEarnings
+            markets={data?.retailers.walmart || []}
+            loading={loading}
+          />
         )}
 
         {/* Earnings Tab */}
