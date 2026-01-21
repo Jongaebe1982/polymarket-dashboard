@@ -30,6 +30,199 @@ interface WalmartEarningsProps {
   loading?: boolean;
 }
 
+// Empty state component with stock chart and news
+function EmptyEarningsState() {
+  const [stockHistory, setStockHistory] = useState<{ timestamp: number; price: number }[]>([]);
+  const [news, setNews] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch 5 days of stock history
+        const fiveDaysAgo = Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000);
+        const now = Math.floor(Date.now() / 1000);
+
+        const stockRes = await fetch(`/api/stocks/history?retailer=walmart&startTs=${fiveDaysAgo}&endTs=${now}`);
+        const stockData = await stockRes.json();
+        if (stockData.history) {
+          setStockHistory(stockData.history);
+        }
+
+        // Fetch news
+        const newsRes = await fetch('/api/news?company=walmart&type=earnings');
+        const newsData = await newsRes.json();
+        if (newsData.articles) {
+          // Filter to last 5 days
+          const fiveDaysAgoMs = fiveDaysAgo * 1000;
+          const recentNews = newsData.articles.filter(
+            (article: NewsArticle) => article.publishedAt * 1000 >= fiveDaysAgoMs
+          );
+          setNews(recentNews);
+        }
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Prepare chart data
+  const stockPrices = stockHistory.map(s => s.price);
+  const minStock = stockPrices.length > 0 ? Math.min(...stockPrices) : 0;
+  const maxStock = stockPrices.length > 0 ? Math.max(...stockPrices) : 1;
+
+  // Map news to timestamps for chart markers
+  const newsTimestamps = new Set(news.map(n => {
+    // Round to nearest hour for matching
+    return Math.floor(n.publishedAt / 3600) * 3600;
+  }));
+
+  const chartData = stockHistory.map(point => {
+    const hourTimestamp = Math.floor(point.timestamp / 3600) * 3600;
+    const hasNews = newsTimestamps.has(hourTimestamp);
+
+    return {
+      time: point.timestamp * 1000,
+      timestamp: point.timestamp,
+      stockPrice: point.price,
+      formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
+      hasNews,
+    };
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Header Message */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">
+          No Active Walmart Earnings Markets
+        </h2>
+        <p className="text-gray-600">
+          There are no active Walmart earnings markets currently. Earnings markets typically
+          open up 18-20 days prior to an earnings release.
+        </p>
+      </div>
+
+      {/* Stock Price Chart */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <span>📈</span> Walmart (WMT) Stock Price - Last 5 Days
+        </h3>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-[300px] bg-gray-50 rounded-lg">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : stockHistory.length === 0 ? (
+          <div className="flex items-center justify-center h-[300px] bg-gray-50 rounded-lg text-gray-500">
+            No stock data available
+          </div>
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="formattedTime"
+                  tick={{ fontSize: 11, fill: '#6b7280' }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e5e7eb' }}
+                />
+                <YAxis
+                  domain={[minStock * 0.99, maxStock * 1.01]}
+                  tick={{ fontSize: 11, fill: RETAILER_COLORS.walmart }}
+                  tickFormatter={(value) => `$${value.toFixed(0)}`}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e5e7eb' }}
+                  width={55}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null;
+                    const data = payload[0].payload;
+                    return (
+                      <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                        <p className="text-xs text-gray-500 mb-1">
+                          {format(new Date(data.time), 'MMM d, yyyy HH:mm')}
+                        </p>
+                        <p className="text-sm font-bold" style={{ color: RETAILER_COLORS.walmart }}>
+                          WMT: ${data.stockPrice.toFixed(2)}
+                        </p>
+                        {data.hasNews && (
+                          <p className="text-xs text-orange-600 mt-1">📰 News published</p>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="stockPrice"
+                  stroke={RETAILER_COLORS.walmart}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                />
+                {/* News markers */}
+                {news.length > 0 && (
+                  <Scatter
+                    data={chartData.filter(d => d.hasNews)}
+                    dataKey="stockPrice"
+                    fill="#f97316"
+                  />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* News Section - Only show if there are news articles */}
+      {news.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span>📰</span> Recent Walmart News - Last 5 Days
+          </h3>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {news.slice(0, 15).map((article, index) => (
+              <a
+                key={index}
+                href={article.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 line-clamp-2 hover:text-blue-600">
+                      {article.title}
+                    </p>
+                    {article.description && (
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">{article.description}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+                      <span>{article.source}</span>
+                      <span>•</span>
+                      <span>{format(new Date(article.publishedAt * 1000), 'MMM d, yyyy h:mm a')}</span>
+                    </div>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Filter for earnings-related markets
 function isEarningsMarket(market: ParsedMarket): boolean {
   const question = market.question.toLowerCase();
@@ -63,24 +256,7 @@ export function WalmartEarnings({ markets, loading }: WalmartEarningsProps) {
   }
 
   if (earningsMarkets.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-        <div className="text-6xl mb-4">📅</div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">
-          No Active Walmart Earnings Markets
-        </h2>
-        <p className="text-gray-600 max-w-md mx-auto">
-          There are no active Walmart earnings markets currently. Earnings markets typically
-          open up 18-20 days prior to an earnings release.
-        </p>
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg inline-block">
-          <p className="text-sm text-blue-800">
-            <span className="font-medium">Tip:</span> Check back closer to Walmart&apos;s next
-            quarterly earnings announcement date.
-          </p>
-        </div>
-      </div>
-    );
+    return <EmptyEarningsState />;
   }
 
   return (
