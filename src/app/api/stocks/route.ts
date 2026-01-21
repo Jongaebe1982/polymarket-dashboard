@@ -8,6 +8,15 @@ const RETAIL_STOCKS = {
   target: 'TGT',
 };
 
+// Shares outstanding (in billions) - updated periodically from company filings
+// Market cap = price × shares outstanding
+const SHARES_OUTSTANDING: Record<string, number> = {
+  WMT: 8.04e9,   // ~8.04 billion shares
+  AMZN: 10.52e9, // ~10.52 billion shares
+  COST: 443e6,   // ~443 million shares
+  TGT: 460e6,    // ~460 million shares
+};
+
 interface StockData {
   symbol: string;
   name: string;
@@ -55,13 +64,17 @@ async function fetchYahooFinanceData(symbol: string): Promise<StockData | null> 
       TGT: 'Target',
     };
 
+    // Calculate market cap from price × shares outstanding
+    const sharesOutstanding = SHARES_OUTSTANDING[symbol] || 0;
+    const marketCap = price * sharesOutstanding;
+
     return {
       symbol,
       name: names[symbol] || symbol,
       price,
       change,
       changePercent,
-      marketCap: meta.marketCap || 0,
+      marketCap,
     };
   } catch (error) {
     console.error(`Error fetching ${symbol}:`, error);
