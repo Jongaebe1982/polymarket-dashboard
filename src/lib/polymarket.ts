@@ -276,44 +276,34 @@ export async function fetchRetailerMarkets(): Promise<{
   return result;
 }
 
-// Fetch all earnings markets (strict filtering for financial/stock markets only)
+// Fetch earnings markets directly from Polymarket's earnings category
 export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
-  const [marketsList, eventMarkets] = await Promise.all([
-    fetchMarkets(200, 0),
-    fetchEvents(200, 0),
-  ]);
+  // Use tag_slug=earnings to get markets from the official earnings category
+  const response = await fetch(`${GAMMA_API_BASE}/events?tag_slug=earnings&active=true&closed=false&limit=50`);
 
-  const allMarketsMap = new Map<string, Market>();
-  [...marketsList, ...eventMarkets].forEach(m => {
-    allMarketsMap.set(m.id, m);
-  });
-  const allMarkets = Array.from(allMarketsMap.values());
+  if (!response.ok) {
+    console.warn(`Failed to fetch earnings events: ${response.status}`);
+    return [];
+  }
 
-  return allMarkets
-    .filter(market => {
-      const question = market.question.toLowerCase();
-      const category = (market.category || '').toLowerCase();
+  const events: Event[] = await response.json();
 
-      // Must be in a financial category
-      const isFinancialCategory = category.includes('finance') ||
-                                  category.includes('stocks') ||
-                                  category.includes('equities') ||
-                                  category.includes('economics');
+  // Extract active markets from events
+  const markets: ParsedMarket[] = [];
+  for (const event of events) {
+    if (event.markets) {
+      for (const market of event.markets) {
+        if (market.active && !market.closed) {
+          markets.push(parseMarket(market));
+        }
+      }
+    }
+  }
 
-      // Check for stock tickers or company-specific earnings language
-      const hasStockTicker = /\b(AAPL|GOOGL|GOOG|MSFT|AMZN|META|NVDA|TSLA|NFLX|AMD|INTC|JPM|BAC|GS|V|MA|WMT|TGT|COST|HD|LOW|DIS|CRM|ORCL|IBM|CSCO)\b/i.test(market.question);
-
-      const hasEarningsContext = (
-        (question.includes('earnings') && (question.includes('beat') || question.includes('q1') || question.includes('q2') || question.includes('q3') || question.includes('q4') || question.includes('quarter'))) ||
-        (question.includes('eps') && /\$?\d/.test(question)) ||
-        (question.includes('revenue') && /\$?\d|billion|million/.test(question)) ||
-        question.includes('guidance')
-      );
-
-      return (isFinancialCategory && hasEarningsContext) || hasStockTicker;
-    })
-    .map(parseMarket)
-    .sort((a, b) => b.volume - a.volume);
+  // Sort by volume and return top 10
+  return markets
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 10);
 }
 
 // Fetch price history for a market token

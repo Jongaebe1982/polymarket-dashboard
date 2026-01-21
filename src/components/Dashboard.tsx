@@ -49,29 +49,11 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Filter earnings markets - only Financial category, top 10 by volume
-  const financialEarnings = data?.earnings.filter(market => {
-    const category = market.category?.toLowerCase() || '';
-    const question = market.question.toLowerCase();
-    // Only include if it's in a financial category OR explicitly about stock earnings
-    const isFinancial = category.includes('finance') ||
-                        category.includes('financial') ||
-                        category.includes('stocks') ||
-                        category.includes('equities') ||
-                        category.includes('economics');
-    const isStockEarnings = /\b(eps|earnings|revenue|beat|guidance)\b.*\b(stock|share|\$|quarter)/i.test(question) ||
-                           /\b(AAPL|GOOGL|MSFT|AMZN|META|NVDA|TSLA|WMT|TGT|COST)\b/i.test(question);
-    return isFinancial || isStockEarnings;
-  }) || [];
-
-  // Apply search filter then take top 10 by volume
-  const filteredEarnings = financialEarnings
-    .filter(market =>
-      market.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      market.description.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => b.volume - a.volume)
-    .slice(0, 10);
+  // Filter earnings markets by search (data already comes as top 10 from earnings category)
+  const filteredEarnings = (data?.earnings || []).filter(market =>
+    market.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    market.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // Calculate stats
   const totalVolume = data?.earnings.reduce((sum, m) => sum + m.volume, 0) || 0;
@@ -258,14 +240,14 @@ export function Dashboard() {
             {/* Header */}
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Top Financial Markets</h2>
-                <p className="text-sm text-gray-500">Top 10 by volume • Financial category only</p>
+                <h2 className="text-xl font-bold text-gray-900">Earnings Markets</h2>
+                <p className="text-sm text-gray-500">Top 10 by volume from Polymarket Earnings</p>
               </div>
               {/* Search */}
               <div className="relative max-w-md">
                 <input
                   type="text"
-                  placeholder="Search financial markets..."
+                  placeholder="Search earnings markets..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -304,7 +286,7 @@ export function Dashboard() {
             ) : (
               <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
                 <p className="text-gray-500">
-                  {searchTerm ? `No markets found matching "${searchTerm}"` : 'No financial markets currently available'}
+                  {searchTerm ? `No markets found matching "${searchTerm}"` : 'No earnings markets currently available'}
                 </p>
               </div>
             )}
