@@ -241,7 +241,7 @@ export function Dashboard() {
             <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Earnings Markets</h2>
-                <p className="text-sm text-gray-500">Top 10 by volume from Polymarket Earnings</p>
+                <p className="text-sm text-gray-500">Top 25 by volume from Polymarket Earnings</p>
               </div>
               {/* Search */}
               <div className="relative max-w-md">

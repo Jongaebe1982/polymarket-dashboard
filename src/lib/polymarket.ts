@@ -300,10 +300,10 @@ export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
     }
   }
 
-  // Sort by volume and return top 10
+  // Sort by volume and return top 25
   return markets
     .sort((a, b) => b.volume - a.volume)
-    .slice(0, 10);
+    .slice(0, 25);
 }
 
 // Fetch price history for a market token
