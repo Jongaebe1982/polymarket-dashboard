@@ -49,24 +49,24 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Filter earnings markets by search (data already comes as top 10 from earnings category)
+  // Filter earnings markets by search (data already comes as top 25 from earnings category)
   const filteredEarnings = (data?.earnings || []).filter(market =>
     market.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
     market.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Calculate stats
-  const totalVolume = data?.earnings.reduce((sum, m) => sum + m.volume, 0) || 0;
-  const significantMoves = data?.earnings.filter(hasSignificantMovement) || [];
-  const activeMarkets = data?.earnings.length || 0;
+  // Get all retail markets (Walmart, Amazon, Costco, Target)
+  const allRetailMarkets = data ? [
+    ...data.retailers.walmart,
+    ...data.retailers.amazon,
+    ...data.retailers.costco,
+    ...data.retailers.target,
+  ] : [];
 
-  // Get comparison data for retailers
-  const retailerComparisonData = data ? [
-    { name: 'walmart' as RetailerName, markets: data.retailers.walmart, label: 'Walmart' },
-    { name: 'amazon' as RetailerName, markets: data.retailers.amazon, label: 'Amazon' },
-    { name: 'costco' as RetailerName, markets: data.retailers.costco, label: 'Costco' },
-    { name: 'target' as RetailerName, markets: data.retailers.target, label: 'Target' },
-  ].filter(r => r.markets.length > 0) : [];
+  // Calculate retail-focused stats
+  const totalRetailMarkets = allRetailMarkets.length;
+  const totalRetailVolume = allRetailMarkets.reduce((sum, m) => sum + m.volume, 0);
+  const retailSignificantMoves = allRetailMarkets.filter(hasSignificantMovement);
 
   if (error && !data) {
     return (
@@ -95,7 +95,7 @@ export function Dashboard() {
             <div className="flex items-center gap-3">
               <span className="text-2xl">📊</span>
               <h1 className="text-xl font-bold text-gray-900">
-                Polymarket Earnings Dashboard
+                Polymarket Retail Dashboard
               </h1>
             </div>
             <div className="flex items-center gap-4">
@@ -143,36 +143,32 @@ export function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            title="Active Markets"
-            value={activeMarkets.toString()}
-            icon="📊"
-          />
-          <StatCard
-            title="Total Volume"
-            value={formatVolume(totalVolume)}
-            icon="💵"
-          />
-          <StatCard
-            title="Significant Moves"
-            value={significantMoves.length.toString()}
-            subtitle=">10% change in 24h"
-            icon="⚡"
-            trend={significantMoves.length > 0 ? 'up' : 'neutral'}
-          />
-          <StatCard
-            title="Retail Markets"
-            value={retailerComparisonData.reduce((sum, r) => sum + r.markets.length, 0).toString()}
-            subtitle="Walmart, Amazon, Costco, Target"
-            icon="🏪"
-          />
-        </div>
-
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <>
+            {/* Stats Row - Retail Focused */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <StatCard
+                title="Total Active Retail Markets"
+                value={totalRetailMarkets.toString()}
+                subtitle="Walmart, Amazon, Costco, Target"
+                icon="🏪"
+              />
+              <StatCard
+                title="Total Retail Volume"
+                value={formatVolume(totalRetailVolume)}
+                subtitle="Combined across all retail markets"
+                icon="💵"
+              />
+              <StatCard
+                title="Significant Moves"
+                value={retailSignificantMoves.length.toString()}
+                subtitle=">10% change in 24h (retail only)"
+                icon="⚡"
+                trend={retailSignificantMoves.length > 0 ? 'up' : 'neutral'}
+              />
+            </div>
+
             {/* Walmart Primary Focus */}
             <section className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -203,17 +199,17 @@ export function Dashboard() {
               </div>
             </section>
 
-            {/* Significant Moves */}
-            {significantMoves.length > 0 && (
+            {/* Significant Retail Moves */}
+            {retailSignificantMoves.length > 0 && (
               <section className="mb-8">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <span>⚡</span> Significant Price Movements
+                  <span>⚡</span> Significant Retail Price Movements
                   <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
                     &gt;10% in 24h
                   </span>
                 </h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {significantMoves.slice(0, 6).map(market => (
+                  {retailSignificantMoves.slice(0, 6).map(market => (
                     <MarketCard key={market.id} market={market} />
                   ))}
                 </div>
@@ -293,33 +289,18 @@ export function Dashboard() {
           </>
         )}
 
-        {/* Competitors Tab */}
+        {/* Competitors Tab - Amazon, Target, Costco only */}
         {activeTab === 'competitors' && (
           <div className="space-y-8">
-            {(['walmart', 'amazon', 'costco', 'target'] as RetailerName[]).map(retailer => (
+            {(['amazon', 'costco', 'target'] as RetailerName[]).map(retailer => (
               <RetailerSection
                 key={retailer}
                 name={retailer}
                 displayName={retailer.charAt(0).toUpperCase() + retailer.slice(1)}
                 markets={data?.retailers[retailer] || []}
                 loading={loading}
-                showChart={retailer === 'walmart'}
               />
             ))}
-
-            {/* Other Earnings Markets */}
-            {(data?.retailers.other?.length || 0) > 0 && (
-              <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <span>📊</span> Other Earnings Markets
-                </h2>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {data?.retailers.other?.slice(0, 9).map(market => (
-                    <MarketCard key={market.id} market={market} />
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
         )}
       </main>
