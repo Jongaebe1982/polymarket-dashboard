@@ -139,13 +139,14 @@ export function PriceChart({ market, height = 200, retailer: passedRetailer }: P
   const maxStock = stockPrices.length > 0 ? Math.max(...stockPrices) : 1;
 
   const chartData = history.map(point => {
-    // Find closest stock price by timestamp (within 2 hour window)
+    // Find closest stock price by timestamp
+    // Use 3-day window (259200 seconds) to handle weekends/holidays when market is closed
     let closestStockPrice: number | null = null;
     let minDiff = Infinity;
 
     for (const [ts, price] of stockMap) {
       const diff = Math.abs(ts - point.timestamp);
-      if (diff < minDiff && diff < 7200) { // 2 hour window
+      if (diff < minDiff && diff < 259200) { // 3-day window for weekends/holidays
         minDiff = diff;
         closestStockPrice = price;
       }
@@ -194,8 +195,8 @@ export function PriceChart({ market, height = 200, retailer: passedRetailer }: P
         <ComposedChart data={chartData} margin={{ top: 10, right: hasStockData ? 50 : 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              <stop offset="5%" stopColor="#4b5563" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#4b5563" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -205,11 +206,11 @@ export function PriceChart({ market, height = 200, retailer: passedRetailer }: P
             tickLine={false}
             axisLine={{ stroke: '#e5e7eb' }}
           />
-          {/* Left Y-axis: Probability */}
+          {/* Left Y-axis: Probability (dark grey) */}
           <YAxis
             yAxisId="probability"
             domain={[Math.max(0, minPrice - priceRange * 0.1), Math.min(100, maxPrice + priceRange * 0.1)]}
-            tick={{ fontSize: 11, fill: '#3b82f6' }}
+            tick={{ fontSize: 11, fill: '#4b5563' }}
             tickFormatter={(value) => `${value.toFixed(0)}%`}
             tickLine={false}
             axisLine={{ stroke: '#e5e7eb' }}
@@ -230,12 +231,13 @@ export function PriceChart({ market, height = 200, retailer: passedRetailer }: P
           )}
           <Tooltip
             content={({ active, payload }) => {
+              // Show tooltip for any active hover on the chart
               if (!active || !payload?.[0]) return null;
               const data = payload[0].payload;
               return (
-                <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2">
-                  <p className="text-xs text-gray-500">{format(new Date(data.time), 'MMM d, yyyy HH:mm')}</p>
-                  <p className="text-sm font-bold text-blue-600">Probability: {data.price.toFixed(1)}%</p>
+                <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[160px]">
+                  <p className="text-xs text-gray-500 mb-1">{format(new Date(data.time), 'MMM d, yyyy HH:mm')}</p>
+                  <p className="text-sm font-bold text-gray-700">Probability: {data.price.toFixed(1)}%</p>
                   {data.stockPrice !== null && showStock && (
                     <p className="text-sm font-bold" style={{ color: stockColor }}>
                       {retailer?.charAt(0).toUpperCase()}{retailer?.slice(1)} Stock: ${data.stockPrice.toFixed(2)}
@@ -246,17 +248,17 @@ export function PriceChart({ market, height = 200, retailer: passedRetailer }: P
             }}
           />
           <ReferenceLine yAxisId="probability" y={50} stroke="#9ca3af" strokeDasharray="5 5" />
-          {/* Probability area */}
+          {/* Probability area - dark grey for contrast against colored stock lines */}
           <Area
             yAxisId="probability"
             type="monotone"
             dataKey="price"
-            stroke="#3b82f6"
+            stroke="#4b5563"
             strokeWidth={2}
             fill="url(#priceGradient)"
             name="Probability"
           />
-          {/* Stock price line */}
+          {/* Stock price line - uses retailer brand color */}
           {hasStockData && (
             <Line
               yAxisId="stock"
