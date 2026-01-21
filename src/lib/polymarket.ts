@@ -19,6 +19,18 @@ export function parseMarket(market: Market): ParsedMarket {
     prices = [0, 0];
   }
 
+  // Parse clobTokenIds (also comes as JSON string array)
+  let tokenIds: string[] = [];
+  try {
+    if (typeof market.clobTokenIds === 'string') {
+      tokenIds = JSON.parse(market.clobTokenIds);
+    } else if (Array.isArray(market.clobTokenIds)) {
+      tokenIds = market.clobTokenIds;
+    }
+  } catch {
+    tokenIds = [];
+  }
+
   return {
     id: market.id,
     question: market.question,
@@ -38,7 +50,7 @@ export function parseMarket(market: Market): ParsedMarket {
     closed: market.closed,
     yesPrice: prices[0] || 0,
     noPrice: prices[1] || 0,
-    clobTokenIds: market.clobTokenIds || [],
+    clobTokenIds: tokenIds,
   };
 }
 

@@ -42,7 +42,7 @@ export function MarketCard({ market, showPriceChange = true, compact = false }: 
               </span>
             )}
           </div>
-          <p className="text-xs text-blue-500 mt-2">Click for price history</p>
+          <p className="text-xs text-blue-500 mt-2">Click for probability history</p>
         </div>
         {showModal && (
           <MarketModal market={market} onClose={() => setShowModal(false)} />
@@ -108,7 +108,7 @@ export function MarketCard({ market, showPriceChange = true, compact = false }: 
         </div>
 
         <p className="mt-3 text-center text-xs text-blue-500">
-          Click to view price history
+          Click to view probability history
         </p>
       </div>
       {showModal && (
@@ -165,9 +165,9 @@ function MarketModal({ market, onClose }: { market: ParsedMarket; onClose: () =>
             </div>
           </div>
 
-          {/* Price History Chart */}
+          {/* Probability History Chart */}
           <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Price History</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Probability History</h3>
             <div className="bg-gray-50 rounded-xl p-4">
               <PriceChart market={market} height={250} />
             </div>

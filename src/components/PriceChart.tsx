@@ -62,7 +62,7 @@ export function PriceChart({ market, height = 200 }: PriceChartProps) {
   if (error || history.length === 0) {
     return (
       <div className={`flex items-center justify-center bg-gray-50 rounded-lg text-gray-500 text-sm`} style={{ height }}>
-        {error || 'No price history available'}
+        {error || 'No probability history available'}
       </div>
     );
   }
