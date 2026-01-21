@@ -12,19 +12,51 @@ import {
   ReferenceLine,
   Area,
   AreaChart,
+  ComposedChart,
 } from 'recharts';
 import { format } from 'date-fns';
-import { PriceHistoryPoint, ParsedMarket } from '@/types/market';
+import { PriceHistoryPoint, ParsedMarket, RetailerName, RETAILER_KEYWORDS, RETAILER_COLORS } from '@/types/market';
+
+// ========================================
+// FEATURE FLAG: Stock Overlay
+// Set to false to disable stock price overlay
+// ========================================
+const ENABLE_STOCK_OVERLAY = true;
+
+interface StockHistoryPoint {
+  timestamp: number;
+  price: number;
+}
+
+// Detect which retailer a market belongs to based on question text
+function detectRetailer(question: string): RetailerName | null {
+  const lowerQuestion = question.toLowerCase();
+  for (const [retailer, keywords] of Object.entries(RETAILER_KEYWORDS)) {
+    for (const keyword of keywords) {
+      if (lowerQuestion.includes(keyword.toLowerCase())) {
+        return retailer as RetailerName;
+      }
+    }
+  }
+  return null;
+}
 
 interface PriceChartProps {
   market: ParsedMarket;
   height?: number;
+  retailer?: RetailerName; // Optional: pass retailer directly if known
 }
 
-export function PriceChart({ market, height = 200 }: PriceChartProps) {
+export function PriceChart({ market, height = 200, retailer: passedRetailer }: PriceChartProps) {
   const [history, setHistory] = useState<PriceHistoryPoint[]>([]);
+  const [stockHistory, setStockHistory] = useState<StockHistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stockLoading, setStockLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showStock, setShowStock] = useState(ENABLE_STOCK_OVERLAY);
+
+  // Detect retailer from market question if not passed
+  const retailer = passedRetailer || detectRetailer(market.question);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -51,6 +83,37 @@ export function PriceChart({ market, height = 200 }: PriceChartProps) {
     fetchHistory();
   }, [market.clobTokenIds]);
 
+  // Fetch stock history when probability history is loaded and retailer is known
+  useEffect(() => {
+    const fetchStockHistory = async () => {
+      if (!ENABLE_STOCK_OVERLAY || !retailer || history.length === 0 || !showStock) {
+        return;
+      }
+
+      setStockLoading(true);
+      try {
+        // Use the same time range as the probability history
+        const startTs = Math.min(...history.map(h => h.timestamp));
+        const endTs = Math.max(...history.map(h => h.timestamp));
+
+        const response = await fetch(
+          `/api/stocks/history?retailer=${retailer}&startTs=${startTs}&endTs=${endTs}`
+        );
+        const data = await response.json();
+
+        if (data.history && data.history.length > 0) {
+          setStockHistory(data.history);
+        }
+      } catch (err) {
+        console.error('Failed to load stock history:', err);
+      } finally {
+        setStockLoading(false);
+      }
+    };
+
+    fetchStockHistory();
+  }, [retailer, history, showStock]);
+
   if (loading) {
     return (
       <div className={`flex items-center justify-center bg-gray-50 rounded-lg`} style={{ height }}>
@@ -67,20 +130,68 @@ export function PriceChart({ market, height = 200 }: PriceChartProps) {
     );
   }
 
-  const chartData = history.map(point => ({
-    time: point.timestamp * 1000,
-    price: point.price * 100,
-    formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
-  }));
+  // Merge probability and stock data by timestamp
+  const stockMap = new Map(stockHistory.map(s => [s.timestamp, s.price]));
+
+  // Normalize stock prices to percentage scale for overlay
+  const stockPrices = stockHistory.map(s => s.price);
+  const minStock = stockPrices.length > 0 ? Math.min(...stockPrices) : 0;
+  const maxStock = stockPrices.length > 0 ? Math.max(...stockPrices) : 1;
+
+  const chartData = history.map(point => {
+    // Find closest stock price by timestamp (within 2 hour window)
+    let closestStockPrice: number | null = null;
+    let minDiff = Infinity;
+
+    for (const [ts, price] of stockMap) {
+      const diff = Math.abs(ts - point.timestamp);
+      if (diff < minDiff && diff < 7200) { // 2 hour window
+        minDiff = diff;
+        closestStockPrice = price;
+      }
+    }
+
+    return {
+      time: point.timestamp * 1000,
+      price: point.price * 100,
+      stockPrice: closestStockPrice,
+      // Normalize stock to 0-100 scale for visual comparison
+      stockNormalized: closestStockPrice !== null
+        ? ((closestStockPrice - minStock) / (maxStock - minStock || 1)) * 100
+        : null,
+      formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
+    };
+  });
 
   const minPrice = Math.min(...chartData.map(d => d.price));
   const maxPrice = Math.max(...chartData.map(d => d.price));
   const priceRange = maxPrice - minPrice;
 
+  const stockColor = retailer ? RETAILER_COLORS[retailer] : '#22c55e';
+  const hasStockData = showStock && stockHistory.length > 0;
+
   return (
-    <div className="w-full" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+    <div className="w-full" style={{ height: height + (ENABLE_STOCK_OVERLAY && retailer ? 32 : 0) }}>
+      {/* Stock overlay toggle - only show if feature is enabled and retailer is detected */}
+      {ENABLE_STOCK_OVERLAY && retailer && (
+        <div className="flex items-center justify-end gap-2 mb-2">
+          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showStock}
+              onChange={(e) => setShowStock(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>
+              Show {retailer.charAt(0).toUpperCase() + retailer.slice(1)} stock price
+              {stockLoading && <span className="ml-1 text-gray-400">(loading...)</span>}
+            </span>
+          </label>
+        </div>
+      )}
+
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={chartData} margin={{ top: 10, right: hasStockData ? 50 : 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -94,14 +205,29 @@ export function PriceChart({ market, height = 200 }: PriceChartProps) {
             tickLine={false}
             axisLine={{ stroke: '#e5e7eb' }}
           />
+          {/* Left Y-axis: Probability */}
           <YAxis
+            yAxisId="probability"
             domain={[Math.max(0, minPrice - priceRange * 0.1), Math.min(100, maxPrice + priceRange * 0.1)]}
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={{ fontSize: 11, fill: '#3b82f6' }}
             tickFormatter={(value) => `${value.toFixed(0)}%`}
             tickLine={false}
             axisLine={{ stroke: '#e5e7eb' }}
             width={45}
           />
+          {/* Right Y-axis: Stock price (only if showing stock) */}
+          {hasStockData && (
+            <YAxis
+              yAxisId="stock"
+              orientation="right"
+              domain={[minStock * 0.995, maxStock * 1.005]}
+              tick={{ fontSize: 11, fill: stockColor }}
+              tickFormatter={(value) => `$${value.toFixed(0)}`}
+              tickLine={false}
+              axisLine={{ stroke: '#e5e7eb' }}
+              width={50}
+            />
+          )}
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload?.[0]) return null;
@@ -109,20 +235,41 @@ export function PriceChart({ market, height = 200 }: PriceChartProps) {
               return (
                 <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2">
                   <p className="text-xs text-gray-500">{format(new Date(data.time), 'MMM d, yyyy HH:mm')}</p>
-                  <p className="text-sm font-bold text-blue-600">{data.price.toFixed(1)}%</p>
+                  <p className="text-sm font-bold text-blue-600">Probability: {data.price.toFixed(1)}%</p>
+                  {data.stockPrice !== null && showStock && (
+                    <p className="text-sm font-bold" style={{ color: stockColor }}>
+                      {retailer?.charAt(0).toUpperCase()}{retailer?.slice(1)} Stock: ${data.stockPrice.toFixed(2)}
+                    </p>
+                  )}
                 </div>
               );
             }}
           />
-          <ReferenceLine y={50} stroke="#9ca3af" strokeDasharray="5 5" />
+          <ReferenceLine yAxisId="probability" y={50} stroke="#9ca3af" strokeDasharray="5 5" />
+          {/* Probability area */}
           <Area
+            yAxisId="probability"
             type="monotone"
             dataKey="price"
             stroke="#3b82f6"
             strokeWidth={2}
             fill="url(#priceGradient)"
+            name="Probability"
           />
-        </AreaChart>
+          {/* Stock price line */}
+          {hasStockData && (
+            <Line
+              yAxisId="stock"
+              type="monotone"
+              dataKey="stockPrice"
+              stroke={stockColor}
+              strokeWidth={2}
+              dot={false}
+              name="Stock Price"
+              connectNulls
+            />
+          )}
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
