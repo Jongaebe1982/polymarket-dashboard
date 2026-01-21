@@ -14,26 +14,16 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  Scatter,
 } from 'recharts';
-
-interface NewsArticle {
-  title: string;
-  link: string;
-  source: string;
-  publishedAt: number;
-  description?: string;
-}
 
 interface WalmartEarningsProps {
   markets: ParsedMarket[];
   loading?: boolean;
 }
 
-// Empty state component with stock chart and news
+// Empty state component with stock chart only
 function EmptyEarningsState() {
   const [stockHistory, setStockHistory] = useState<{ timestamp: number; price: number }[]>([]);
-  const [news, setNews] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,18 +37,6 @@ function EmptyEarningsState() {
         const stockData = await stockRes.json();
         if (stockData.history) {
           setStockHistory(stockData.history);
-        }
-
-        // Fetch news
-        const newsRes = await fetch('/api/news?company=walmart&type=earnings');
-        const newsData = await newsRes.json();
-        if (newsData.articles) {
-          // Filter to last 5 days
-          const fiveDaysAgoMs = fiveDaysAgo * 1000;
-          const recentNews = newsData.articles.filter(
-            (article: NewsArticle) => article.publishedAt * 1000 >= fiveDaysAgoMs
-          );
-          setNews(recentNews);
         }
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -75,24 +53,11 @@ function EmptyEarningsState() {
   const minStock = stockPrices.length > 0 ? Math.min(...stockPrices) : 0;
   const maxStock = stockPrices.length > 0 ? Math.max(...stockPrices) : 1;
 
-  // Map news to timestamps for chart markers
-  const newsTimestamps = new Set(news.map(n => {
-    // Round to nearest hour for matching
-    return Math.floor(n.publishedAt / 3600) * 3600;
+  const chartData = stockHistory.map(point => ({
+    time: point.timestamp * 1000,
+    stockPrice: point.price,
+    formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
   }));
-
-  const chartData = stockHistory.map(point => {
-    const hourTimestamp = Math.floor(point.timestamp / 3600) * 3600;
-    const hasNews = newsTimestamps.has(hourTimestamp);
-
-    return {
-      time: point.timestamp * 1000,
-      timestamp: point.timestamp,
-      stockPrice: point.price,
-      formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
-      hasNews,
-    };
-  });
 
   return (
     <div className="space-y-6">
@@ -152,9 +117,6 @@ function EmptyEarningsState() {
                         <p className="text-sm font-bold" style={{ color: RETAILER_COLORS.walmart }}>
                           WMT: ${data.stockPrice.toFixed(2)}
                         </p>
-                        {data.hasNews && (
-                          <p className="text-xs text-orange-600 mt-1">📰 News published</p>
-                        )}
                       </div>
                     );
                   }}
@@ -167,58 +129,11 @@ function EmptyEarningsState() {
                   dot={false}
                   connectNulls
                 />
-                {/* News markers */}
-                {news.length > 0 && (
-                  <Scatter
-                    data={chartData.filter(d => d.hasNews)}
-                    dataKey="stockPrice"
-                    fill="#f97316"
-                  />
-                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
       </div>
-
-      {/* News Section - Only show if there are news articles */}
-      {news.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <span>📰</span> Recent Walmart News - Last 5 Days
-          </h3>
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            {news.slice(0, 15).map((article, index) => (
-              <a
-                key={index}
-                href={article.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 line-clamp-2 hover:text-blue-600">
-                      {article.title}
-                    </p>
-                    {article.description && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">{article.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                      <span>{article.source}</span>
-                      <span>•</span>
-                      <span>{format(new Date(article.publishedAt * 1000), 'MMM d, yyyy h:mm a')}</span>
-                    </div>
-                  </div>
-                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -280,11 +195,10 @@ export function WalmartEarnings({ markets, loading }: WalmartEarningsProps) {
   );
 }
 
-// Full-screen earnings dashlet with chart and news
+// Full-screen earnings dashlet with chart
 function EarningsDashlet({ market }: { market: ParsedMarket }) {
   const [history, setHistory] = useState<PriceHistoryPoint[]>([]);
   const [stockHistory, setStockHistory] = useState<{ timestamp: number; price: number }[]>([]);
-  const [news, setNews] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showStock, setShowStock] = useState(true);
 
@@ -308,22 +222,13 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
           setHistory(historyData.history);
         }
 
-        // Fetch stock history
-        if (historyData.history?.length > 0) {
-          const startTs = Math.min(...historyData.history.map((h: PriceHistoryPoint) => h.timestamp));
-          const endTs = Math.max(...historyData.history.map((h: PriceHistoryPoint) => h.timestamp));
-          const stockRes = await fetch(`/api/stocks/history?retailer=walmart&startTs=${startTs}&endTs=${endTs}`);
-          const stockData = await stockRes.json();
-          if (stockData.history) {
-            setStockHistory(stockData.history);
-          }
-        }
-
-        // Fetch news
-        const newsRes = await fetch('/api/news?company=walmart&type=earnings');
-        const newsData = await newsRes.json();
-        if (newsData.articles) {
-          setNews(newsData.articles);
+        // Fetch stock history (5 days)
+        const fiveDaysAgo = Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000);
+        const now = Math.floor(Date.now() / 1000);
+        const stockRes = await fetch(`/api/stocks/history?retailer=walmart&startTs=${fiveDaysAgo}&endTs=${now}`);
+        const stockData = await stockRes.json();
+        if (stockData.history) {
+          setStockHistory(stockData.history);
         }
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -341,15 +246,6 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
   const minStock = stockPrices.length > 0 ? Math.min(...stockPrices) : 0;
   const maxStock = stockPrices.length > 0 ? Math.max(...stockPrices) : 1;
 
-  // Get time range for news filtering
-  const historyStartTs = history.length > 0 ? Math.min(...history.map(h => h.timestamp)) : 0;
-  const historyEndTs = history.length > 0 ? Math.max(...history.map(h => h.timestamp)) : Date.now() / 1000;
-
-  // Filter news to chart timeframe
-  const relevantNews = news.filter(
-    article => article.publishedAt >= historyStartTs && article.publishedAt <= historyEndTs
-  );
-
   const chartData = history.map(point => {
     // Find closest stock price
     let closestStockPrice: number | null = null;
@@ -362,19 +258,12 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
       }
     }
 
-    // Find news articles near this timestamp (within 6 hours)
-    const nearbyNews = relevantNews.filter(
-      article => Math.abs(article.publishedAt - point.timestamp) < 21600
-    );
-
     return {
       time: point.timestamp * 1000,
       timestamp: point.timestamp,
       price: point.price * 100,
       stockPrice: closestStockPrice,
       formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
-      newsCount: nearbyNews.length,
-      newsArticles: nearbyNews,
     };
   });
 
@@ -498,13 +387,6 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
                             WMT Stock: ${data.stockPrice.toFixed(2)}
                           </p>
                         )}
-                        {data.newsCount > 0 && (
-                          <div className="mt-2 pt-2 border-t border-gray-100">
-                            <p className="text-xs text-orange-600 font-medium">
-                              📰 {data.newsCount} news article{data.newsCount > 1 ? 's' : ''} nearby
-                            </p>
-                          </div>
-                        )}
                       </div>
                     );
                   }}
@@ -533,57 +415,8 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
                     connectNulls
                   />
                 )}
-
-                {/* News markers - orange dots where news occurred */}
-                <Scatter
-                  yAxisId="probability"
-                  data={chartData.filter(d => d.newsCount > 0)}
-                  dataKey="price"
-                  fill="#f97316"
-                />
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-
-      {/* News Timeline */}
-      <div className="p-6 border-t border-gray-100 bg-gray-50">
-        <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <span>📰</span> Related News Headlines
-        </h4>
-        {news.length === 0 ? (
-          <p className="text-sm text-gray-500">No recent news articles found.</p>
-        ) : (
-          <div className="space-y-3 max-h-[300px] overflow-y-auto">
-            {news.slice(0, 10).map((article, index) => (
-              <a
-                key={index}
-                href={article.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 line-clamp-2 hover:text-blue-600">
-                      {article.title}
-                    </p>
-                    {article.description && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">{article.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                      <span>{article.source}</span>
-                      <span>•</span>
-                      <span>{format(new Date(article.publishedAt * 1000), 'MMM d, yyyy h:mm a')}</span>
-                    </div>
-                  </div>
-                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </div>
-              </a>
-            ))}
           </div>
         )}
       </div>
