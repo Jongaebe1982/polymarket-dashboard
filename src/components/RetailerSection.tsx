@@ -107,24 +107,28 @@ export function RetailerCompact({
   name,
   displayName,
   markets,
+  onClick,
 }: {
   name: RetailerName;
   displayName: string;
   markets: ParsedMarket[];
+  onClick?: () => void;
 }) {
   const color = RETAILER_COLORS[name];
   const logo = retailerLogos[name];
 
-  const topMarket = markets.sort((a, b) => b.volume - a.volume)[0];
+  const topMarket = [...markets].sort((a, b) => b.volume - a.volume)[0];
 
   return (
     <div
-      className="p-4 rounded-xl border-2 bg-white transition-all hover:shadow-lg"
+      className={`p-4 rounded-xl border-2 bg-white transition-all hover:shadow-lg ${onClick ? 'cursor-pointer' : ''}`}
       style={{ borderColor: color }}
+      onClick={onClick}
     >
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xl">{logo}</span>
         <h3 className="font-bold text-gray-900">{displayName}</h3>
+        <span className="text-xs text-gray-400 ml-auto">{markets.length} markets</span>
       </div>
 
       {topMarket ? (
@@ -142,6 +146,7 @@ export function RetailerCompact({
       ) : (
         <p className="text-sm text-gray-400 italic">No active markets</p>
       )}
+      {onClick && <p className="text-xs text-blue-500 mt-3 text-center">Click to view all {displayName} markets</p>}
     </div>
   );
 }

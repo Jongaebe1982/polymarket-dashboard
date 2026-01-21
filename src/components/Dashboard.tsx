@@ -20,6 +20,38 @@ interface DashboardData {
   timestamp: string;
 }
 
+// Title info popup component
+function TitleInfoPopup({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <span className="text-2xl">📊</span>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <p className="text-gray-700 leading-relaxed">
+          Polymarket Prediction market data aggregates collective beliefs, offering signals that improve forecasting, decision-making, and risk management.
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +59,8 @@ export function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'earnings' | 'competitors'>('overview');
+  const [showTitleInfo, setShowTitleInfo] = useState(false);
+  const [retailFilter, setRetailFilter] = useState<RetailerName | 'all'>('all');
 
   const fetchData = useCallback(async () => {
     try {
@@ -95,7 +129,11 @@ export function Dashboard() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <span className="text-2xl">📊</span>
-              <h1 className="text-xl font-bold text-gray-900">
+              <h1
+                onClick={() => setShowTitleInfo(true)}
+                className="text-xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+                title="Click to learn more"
+              >
                 Polymarket Retail Dashboard
               </h1>
             </div>
@@ -123,7 +161,7 @@ export function Dashboard() {
             {[
               { id: 'overview', label: 'Overview', icon: '📈' },
               { id: 'earnings', label: 'All Earnings', icon: '💰' },
-              { id: 'competitors', label: 'Retail Competitors', icon: '🏬' },
+              { id: 'competitors', label: 'All Retail Markets', icon: '🏬' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -157,12 +195,22 @@ export function Dashboard() {
                 value={totalRetailMarkets.toString()}
                 subtitle="Walmart, Amazon, Costco, Target"
                 icon="🏪"
+                clickable
+                onClick={() => {
+                  setRetailFilter('all');
+                  setActiveTab('competitors');
+                }}
               />
               <StatCard
                 title="Total Retail Volume"
                 value={formatVolume(totalRetailVolume)}
                 subtitle="Combined across all retail markets"
                 icon="💵"
+                clickable
+                onClick={() => {
+                  setRetailFilter('all');
+                  setActiveTab('competitors');
+                }}
               />
               <StatCard
                 title="Significant Moves"
@@ -198,6 +246,10 @@ export function Dashboard() {
                     name={retailer}
                     displayName={retailer.charAt(0).toUpperCase() + retailer.slice(1)}
                     markets={data?.retailers[retailer] || []}
+                    onClick={() => {
+                      setRetailFilter(retailer);
+                      setActiveTab('competitors');
+                    }}
                   />
                 ))}
               </div>
@@ -293,15 +345,38 @@ export function Dashboard() {
           </>
         )}
 
-        {/* Competitors Tab - Amazon, Target, Costco only */}
+        {/* All Retail Markets Tab */}
         {activeTab === 'competitors' && (
-          <div className="space-y-8">
-            {(['amazon', 'costco', 'target'] as RetailerName[]).map(retailer => (
+          <div className="space-y-6">
+            {/* Filter Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white rounded-xl border border-gray-200 p-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">All Retail Markets</h2>
+                <p className="text-sm text-gray-500">Filter by retailer to view specific markets</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Filter:</label>
+                <select
+                  value={retailFilter}
+                  onChange={e => setRetailFilter(e.target.value as RetailerName | 'all')}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                >
+                  <option value="all">All Retailers</option>
+                  <option value="walmart">Walmart</option>
+                  <option value="amazon">Amazon</option>
+                  <option value="costco">Costco</option>
+                  <option value="target">Target</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Filtered Retailer Sections */}
+            {(retailFilter === 'all' ? ['walmart', 'amazon', 'costco', 'target'] : [retailFilter]).map(retailer => (
               <RetailerSection
                 key={retailer}
-                name={retailer}
+                name={retailer as RetailerName}
                 displayName={retailer.charAt(0).toUpperCase() + retailer.slice(1)}
-                markets={data?.retailers[retailer] || []}
+                markets={data?.retailers[retailer as RetailerName] || []}
                 loading={loading}
               />
             ))}
@@ -326,6 +401,9 @@ export function Dashboard() {
           </div>
         </div>
       </footer>
+
+      {/* Title Info Popup */}
+      <TitleInfoPopup isOpen={showTitleInfo} onClose={() => setShowTitleInfo(false)} />
     </div>
   );
 }

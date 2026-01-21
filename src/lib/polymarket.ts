@@ -318,10 +318,17 @@ export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
     .slice(0, 25);
 }
 
-// Fetch price history for a market token
+// Fetch price history for a market token (minimum 5 days)
 export async function fetchPriceHistory(tokenId: string): Promise<PriceHistoryPoint[]> {
   try {
-    const response = await fetch(`${CLOB_API_BASE}/prices-history?market=${tokenId}&interval=1d&fidelity=60`);
+    // Calculate timestamp for 7 days ago to ensure we get at least 5 days of data
+    const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+    const now = Math.floor(Date.now() / 1000);
+
+    // Use startTs and endTs for a specific time range, with hourly fidelity for good resolution
+    const response = await fetch(
+      `${CLOB_API_BASE}/prices-history?market=${tokenId}&startTs=${sevenDaysAgo}&endTs=${now}&fidelity=60`
+    );
 
     if (!response.ok) {
       console.warn(`Failed to fetch price history for ${tokenId}: ${response.status}`);

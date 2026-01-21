@@ -172,9 +172,11 @@ interface StatCardProps {
   subtitle?: string;
   trend?: 'up' | 'down' | 'neutral';
   icon?: string;
+  onClick?: () => void;
+  clickable?: boolean;
 }
 
-export function StatCard({ title, value, subtitle, trend, icon }: StatCardProps) {
+export function StatCard({ title, value, subtitle, trend, icon, onClick, clickable }: StatCardProps) {
   const trendColors = {
     up: 'text-green-600',
     down: 'text-red-600',
@@ -182,7 +184,12 @@ export function StatCard({ title, value, subtitle, trend, icon }: StatCardProps)
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
+    <div
+      className={`bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow ${
+        clickable ? 'cursor-pointer hover:border-blue-400 hover:bg-blue-50/30' : ''
+      }`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-500">{title}</span>
         {icon && <span className="text-xl">{icon}</span>}
@@ -191,6 +198,7 @@ export function StatCard({ title, value, subtitle, trend, icon }: StatCardProps)
         {value}
       </p>
       {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+      {clickable && <p className="text-xs text-blue-500 mt-2">Click to view all</p>}
     </div>
   );
 }
