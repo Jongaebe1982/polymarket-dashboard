@@ -1,0 +1,364 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { ParsedMarket, RetailerName, RETAILER_COLORS } from '@/types/market';
+import { RetailerSection, RetailerCompact } from './RetailerSection';
+import { MarketCard, MarketCardSkeleton } from './MarketCard';
+import { StatCard, MarketCountChart } from './PriceChart';
+import { formatVolume, hasSignificantMovement } from '@/lib/polymarket';
+
+interface DashboardData {
+  retailers: {
+    walmart: ParsedMarket[];
+    amazon: ParsedMarket[];
+    costco: ParsedMarket[];
+    target: ParsedMarket[];
+    other: ParsedMarket[];
+  };
+  earnings: ParsedMarket[];
+  timestamp: string;
+}
+
+export function Dashboard() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'earnings' | 'competitors'>('overview');
+
+  const fetchData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/markets');
+      if (!response.ok) throw new Error('Failed to fetch data');
+      const result = await response.json();
+      setData(result);
+      setLastUpdated(new Date());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    // Auto-refresh every 2 minutes
+    const interval = setInterval(fetchData, 120000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // Filter earnings markets - only Financial category, top 10 by volume
+  const financialEarnings = data?.earnings.filter(market => {
+    const category = market.category?.toLowerCase() || '';
+    const question = market.question.toLowerCase();
+    // Only include if it's in a financial category OR explicitly about stock earnings
+    const isFinancial = category.includes('finance') ||
+                        category.includes('financial') ||
+                        category.includes('stocks') ||
+                        category.includes('equities') ||
+                        category.includes('economics');
+    const isStockEarnings = /\b(eps|earnings|revenue|beat|guidance)\b.*\b(stock|share|\$|quarter)/i.test(question) ||
+                           /\b(AAPL|GOOGL|MSFT|AMZN|META|NVDA|TSLA|WMT|TGT|COST)\b/i.test(question);
+    return isFinancial || isStockEarnings;
+  }) || [];
+
+  // Apply search filter then take top 10 by volume
+  const filteredEarnings = financialEarnings
+    .filter(market =>
+      market.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      market.description.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 10);
+
+  // Calculate stats
+  const totalVolume = data?.earnings.reduce((sum, m) => sum + m.volume, 0) || 0;
+  const significantMoves = data?.earnings.filter(hasSignificantMovement) || [];
+  const activeMarkets = data?.earnings.length || 0;
+
+  // Get comparison data for retailers
+  const retailerComparisonData = data ? [
+    { name: 'walmart' as RetailerName, markets: data.retailers.walmart, label: 'Walmart' },
+    { name: 'amazon' as RetailerName, markets: data.retailers.amazon, label: 'Amazon' },
+    { name: 'costco' as RetailerName, markets: data.retailers.costco, label: 'Costco' },
+    { name: 'target' as RetailerName, markets: data.retailers.target, label: 'Target' },
+  ].filter(r => r.markets.length > 0) : [];
+
+  if (error && !data) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Failed to Load Data</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={fetchData}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📊</span>
+              <h1 className="text-xl font-bold text-gray-900">
+                Polymarket Earnings Dashboard
+              </h1>
+            </div>
+            <div className="flex items-center gap-4">
+              {lastUpdated && (
+                <span className="text-sm text-gray-500">
+                  Updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={fetchData}
+                disabled={loading}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                title="Refresh data"
+              >
+                <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 -mb-px">
+            {[
+              { id: 'overview', label: 'Overview', icon: '📈' },
+              { id: 'earnings', label: 'All Earnings', icon: '💰' },
+              { id: 'competitors', label: 'Retail Competitors', icon: '🏬' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`px-4 py-3 text-sm font-medium transition-colors flex items-center gap-2 border-b-2 ${
+                  activeTab === tab.id
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <StatCard
+            title="Active Markets"
+            value={activeMarkets.toString()}
+            icon="📊"
+          />
+          <StatCard
+            title="Total Volume"
+            value={formatVolume(totalVolume)}
+            icon="💵"
+          />
+          <StatCard
+            title="Significant Moves"
+            value={significantMoves.length.toString()}
+            subtitle=">10% change in 24h"
+            icon="⚡"
+            trend={significantMoves.length > 0 ? 'up' : 'neutral'}
+          />
+          <StatCard
+            title="Retail Markets"
+            value={retailerComparisonData.reduce((sum, r) => sum + r.markets.length, 0).toString()}
+            subtitle="Walmart, Amazon, Costco, Target"
+            icon="🏪"
+          />
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Walmart Primary Focus */}
+            <section className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span>🏪</span> Walmart Markets
+                <span className="text-sm font-normal text-gray-500">(Primary Focus)</span>
+              </h2>
+              <RetailerSection
+                name="walmart"
+                displayName="Walmart (WMT)"
+                markets={data?.retailers.walmart || []}
+                loading={loading}
+                showChart
+              />
+            </section>
+
+            {/* Quick Competitor Overview */}
+            <section className="mb-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Competitor Snapshot</h2>
+              <div className="grid md:grid-cols-3 gap-4">
+                {(['amazon', 'costco', 'target'] as RetailerName[]).map(retailer => (
+                  <RetailerCompact
+                    key={retailer}
+                    name={retailer}
+                    displayName={retailer.charAt(0).toUpperCase() + retailer.slice(1)}
+                    markets={data?.retailers[retailer] || []}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {/* Significant Moves */}
+            {significantMoves.length > 0 && (
+              <section className="mb-8">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <span>⚡</span> Significant Price Movements
+                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                    &gt;10% in 24h
+                  </span>
+                </h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {significantMoves.slice(0, 6).map(market => (
+                    <MarketCard key={market.id} market={market} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Market Count Chart */}
+            <section className="mb-8">
+              <MarketCountChart
+                data={[
+                  { name: 'Walmart', count: data?.retailers.walmart.length || 0, color: RETAILER_COLORS.walmart },
+                  { name: 'Amazon', count: data?.retailers.amazon.length || 0, color: RETAILER_COLORS.amazon },
+                  { name: 'Costco', count: data?.retailers.costco.length || 0, color: RETAILER_COLORS.costco },
+                  { name: 'Target', count: data?.retailers.target.length || 0, color: RETAILER_COLORS.target },
+                ]}
+              />
+            </section>
+          </>
+        )}
+
+        {/* Earnings Tab */}
+        {activeTab === 'earnings' && (
+          <>
+            {/* Header */}
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Top Financial Markets</h2>
+                <p className="text-sm text-gray-500">Top 10 by volume • Financial category only</p>
+              </div>
+              {/* Search */}
+              <div className="relative max-w-md">
+                <input
+                  type="text"
+                  placeholder="Search financial markets..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Earnings Grid */}
+            {loading ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <MarketCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : filteredEarnings.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {filteredEarnings.map((market, index) => (
+                  <div key={market.id} className="relative">
+                    {/* Rank badge */}
+                    <div className="absolute -top-2 -left-2 z-10 w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                      {index + 1}
+                    </div>
+                    {/* Significant move indicator */}
+                    {hasSignificantMovement(market) && (
+                      <div className="absolute -top-2 -right-2 z-10 px-2 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full">
+                        HOT
+                      </div>
+                    )}
+                    <MarketCard market={market} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                <p className="text-gray-500">
+                  {searchTerm ? `No markets found matching "${searchTerm}"` : 'No financial markets currently available'}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Competitors Tab */}
+        {activeTab === 'competitors' && (
+          <div className="space-y-8">
+            {(['walmart', 'amazon', 'costco', 'target'] as RetailerName[]).map(retailer => (
+              <RetailerSection
+                key={retailer}
+                name={retailer}
+                displayName={retailer.charAt(0).toUpperCase() + retailer.slice(1)}
+                markets={data?.retailers[retailer] || []}
+                loading={loading}
+                showChart={retailer === 'walmart'}
+              />
+            ))}
+
+            {/* Other Earnings Markets */}
+            {(data?.retailers.other?.length || 0) > 0 && (
+              <section>
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <span>📊</span> Other Earnings Markets
+                </h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {data?.retailers.other?.slice(0, 9).map(market => (
+                    <MarketCard key={market.id} market={market} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 mt-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm text-gray-500">
+              Data from{' '}
+              <a href="https://polymarket.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                Polymarket
+              </a>
+              {' '}• Auto-refreshes every 2 minutes
+            </p>
+            <p className="text-sm text-gray-400">
+              This is not financial advice. Prediction markets involve risk.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
