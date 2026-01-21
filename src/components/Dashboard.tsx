@@ -5,6 +5,7 @@ import { ParsedMarket, RetailerName, RETAILER_COLORS } from '@/types/market';
 import { RetailerSection, RetailerCompact } from './RetailerSection';
 import { MarketCard, MarketCardSkeleton } from './MarketCard';
 import { StatCard, MarketCountChart } from './PriceChart';
+import { StockTicker } from './StockTicker';
 import { formatVolume, hasSignificantMovement } from '@/lib/polymarket';
 
 interface DashboardData {
@@ -146,6 +147,9 @@ export function Dashboard() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <>
+            {/* Stock Ticker */}
+            <StockTicker />
+
             {/* Stats Row - Retail Focused */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatCard
