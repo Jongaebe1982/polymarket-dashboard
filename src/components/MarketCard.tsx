@@ -209,7 +209,7 @@ function MarketModal({ market, onClose }: { market: ParsedMarket; onClose: () =>
             rel="noopener noreferrer"
             className="block w-full text-center py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
           >
-            Trade on Polymarket
+            View on Polymarket
           </a>
         </div>
       </div>
