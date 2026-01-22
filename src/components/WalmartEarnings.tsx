@@ -533,78 +533,13 @@ function ResolvedMarketCard({ market }: { market: ParsedMarket }) {
   );
 }
 
-// Modal for resolved market with full chart
+// Modal for resolved market details
 function ResolvedMarketModal({ market, onClose }: { market: ParsedMarket; onClose: () => void }) {
-  const [history, setHistory] = useState<PriceHistoryPoint[]>([]);
-  const [stockHistory, setStockHistory] = useState<{ timestamp: number; price: number }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showStock, setShowStock] = useState(true);
-
   const outcome = market.yesPrice >= 0.5 ? 'Yes' : 'No';
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!market.clobTokenIds?.[0]) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const historyRes = await fetch(`/api/markets?type=history&tokenId=${market.clobTokenIds[0]}`);
-        const historyData = await historyRes.json();
-        if (historyData.history) {
-          setHistory(historyData.history);
-        }
-
-        const fiveDaysAgo = Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000);
-        const now = Math.floor(Date.now() / 1000);
-        const stockRes = await fetch(`/api/stocks/history?retailer=walmart&startTs=${fiveDaysAgo}&endTs=${now}`);
-        const stockData = await stockRes.json();
-        if (stockData.history) {
-          setStockHistory(stockData.history);
-        }
-      } catch (err) {
-        console.error('Failed to fetch data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [market.clobTokenIds]);
-
-  const stockMap = new Map(stockHistory.map(s => [s.timestamp, s.price]));
-  const stockPrices = stockHistory.map(s => s.price);
-  const minStock = stockPrices.length > 0 ? Math.min(...stockPrices) : 0;
-  const maxStock = stockPrices.length > 0 ? Math.max(...stockPrices) : 1;
-
-  const chartData = history.map(point => {
-    let closestStockPrice: number | null = null;
-    let minDiff = Infinity;
-    for (const [ts, price] of stockMap) {
-      const diff = Math.abs(ts - point.timestamp);
-      if (diff < minDiff && diff < 259200) {
-        minDiff = diff;
-        closestStockPrice = price;
-      }
-    }
-
-    return {
-      time: point.timestamp * 1000,
-      price: point.price * 100,
-      stockPrice: closestStockPrice,
-      formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
-    };
-  });
-
-  const minPrice = chartData.length > 0 ? Math.min(...chartData.map(d => d.price)) : 0;
-  const maxPrice = chartData.length > 0 ? Math.max(...chartData.map(d => d.price)) : 100;
-  const priceRange = maxPrice - minPrice || 1;
-  const hasStockData = showStock && stockHistory.length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-start justify-between">
           <div className="flex-1 pr-4">
             <div className="flex items-center gap-2 mb-1">
@@ -623,6 +558,7 @@ function ResolvedMarketModal({ market, onClose }: { market: ParsedMarket; onClos
         </div>
 
         <div className="p-6">
+          {/* Market stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="text-center p-3 rounded-xl bg-green-50 border border-green-200">
               <p className="text-xs text-green-700 uppercase font-medium">Final Yes</p>
@@ -644,94 +580,45 @@ function ResolvedMarketModal({ market, onClose }: { market: ParsedMarket; onClos
             </div>
           </div>
 
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Historical Probability & Stock Price</h3>
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showStock}
-                onChange={(e) => setShowStock(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600"
-              />
-              <span>Show WMT stock</span>
-            </label>
+          {/* Chart preview notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="font-semibold text-blue-900 mb-1">View Full Price History on Polymarket</h4>
+                <p className="text-sm text-blue-700">
+                  Historical price charts for resolved markets are available directly on Polymarket.
+                  Click the button below to see the complete probability history for this market.
+                </p>
+              </div>
+            </div>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center h-[300px] bg-gray-50 rounded-lg">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : history.length === 0 ? (
-            <div className="flex items-center justify-center h-[300px] bg-gray-50 rounded-lg text-gray-500">
-              No probability history available
-            </div>
-          ) : (
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData} margin={{ top: 20, right: hasStockData ? 55 : 20, left: 0, bottom: 20 }}>
-                  <defs>
-                    <linearGradient id="resolvedGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4b5563" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#4b5563" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="formattedTime" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
-                  <YAxis
-                    yAxisId="probability"
-                    domain={[Math.max(0, minPrice - priceRange * 0.1), Math.min(100, maxPrice + priceRange * 0.1)]}
-                    tick={{ fontSize: 11, fill: '#4b5563' }}
-                    tickFormatter={(value) => `${value.toFixed(0)}%`}
-                    tickLine={false}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                    width={45}
-                  />
-                  {hasStockData && (
-                    <YAxis
-                      yAxisId="stock"
-                      orientation="right"
-                      domain={[minStock * 0.995, maxStock * 1.005]}
-                      tick={{ fontSize: 11, fill: RETAILER_COLORS.walmart }}
-                      tickFormatter={(value) => `$${value.toFixed(0)}`}
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      width={50}
-                    />
-                  )}
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.[0]) return null;
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-                          <p className="text-xs text-gray-500 mb-1">{format(new Date(data.time), 'MMM d, yyyy HH:mm')}</p>
-                          <p className="text-sm font-bold text-gray-700">Probability: {data.price.toFixed(1)}%</p>
-                          {data.stockPrice !== null && showStock && (
-                            <p className="text-sm font-bold" style={{ color: RETAILER_COLORS.walmart }}>
-                              WMT: ${data.stockPrice.toFixed(2)}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    }}
-                  />
-                  <ReferenceLine yAxisId="probability" y={50} stroke="#9ca3af" strokeDasharray="5 5" />
-                  <Area yAxisId="probability" type="monotone" dataKey="price" stroke="#4b5563" strokeWidth={2} fill="url(#resolvedGradient)" />
-                  {hasStockData && (
-                    <Line yAxisId="stock" type="monotone" dataKey="stockPrice" stroke={RETAILER_COLORS.walmart} strokeWidth={2} dot={false} connectNulls />
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
+          {/* Market description if available */}
+          {market.description && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Market Description</h4>
+              <p className="text-sm text-gray-600 leading-relaxed line-clamp-4">{market.description}</p>
             </div>
           )}
 
+          {/* CTA button */}
           <a
             href={`https://polymarket.com/event/${market.slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-6 block w-full text-center py-3 px-4 bg-gray-600 text-white rounded-xl font-medium hover:bg-gray-700 transition-colors"
+            className="block w-full text-center py-4 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
           >
-            View on Polymarket
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              View Chart & Details on Polymarket
+            </span>
           </a>
         </div>
       </div>
