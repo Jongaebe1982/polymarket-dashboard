@@ -321,29 +321,25 @@ export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
 // Fetch resolved Walmart earnings markets
 export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
   try {
-    // Try multiple approaches to find resolved Walmart markets
     const walmartPattern = /\bWMT\b|\bWalmart\b/i;
-    const earningsKeywords = ['earnings', 'revenue', 'eps', 'quarterly', 'q1', 'q2', 'q3', 'q4', 'fiscal', 'beat', 'guidance'];
-
     const markets: ParsedMarket[] = [];
 
-    // Approach 1: Search for closed events with Stocks tag
-    const stocksResponse = await fetch(
-      `${GAMMA_API_BASE}/events?tag_id=604&closed=true&limit=100`
+    // Use Earnings tag (id=1013) with order by endDate descending to find recent resolved markets
+    // This is the most reliable way to find Walmart earnings markets
+    const earningsResponse = await fetch(
+      `${GAMMA_API_BASE}/events?tag_id=1013&order=endDate&ascending=false&limit=200`
     );
 
-    if (stocksResponse.ok) {
-      const events: Event[] = await stocksResponse.json();
+    if (earningsResponse.ok) {
+      const events: Event[] = await earningsResponse.json();
       for (const event of events) {
         const eventTitle = event.title || '';
-        const searchText = `${eventTitle} ${event.description || ''}`;
 
-        if (walmartPattern.test(searchText) && event.markets) {
+        // Check if this is a Walmart event
+        if (walmartPattern.test(eventTitle) && event.markets) {
           for (const market of event.markets) {
-            const question = market.question.toLowerCase();
-            const isEarnings = earningsKeywords.some(kw => question.includes(kw));
-
-            if (isEarnings && (market.closed || !market.active)) {
+            // Only include closed markets
+            if (market.closed) {
               markets.push(parseMarket(market));
             }
           }
@@ -351,31 +347,37 @@ export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
       }
     }
 
-    // Approach 2: Direct market search for Walmart
-    const marketResponse = await fetch(
-      `${GAMMA_API_BASE}/markets?closed=true&limit=100`
-    );
+    // Also try with Stocks tag as fallback
+    if (markets.length === 0) {
+      const stocksResponse = await fetch(
+        `${GAMMA_API_BASE}/events?tag_id=604&order=endDate&ascending=false&limit=200`
+      );
 
-    if (marketResponse.ok) {
-      const allMarkets: Market[] = await marketResponse.json();
-      for (const market of allMarkets) {
-        const searchText = `${market.question} ${market.description || ''}`.toLowerCase();
+      if (stocksResponse.ok) {
+        const events: Event[] = await stocksResponse.json();
+        for (const event of events) {
+          const eventTitle = event.title || '';
+          const question = event.markets?.[0]?.question?.toLowerCase() || '';
 
-        if (walmartPattern.test(searchText)) {
-          const isEarnings = earningsKeywords.some(kw => searchText.includes(kw));
+          // Check if this is a Walmart earnings event
+          if (walmartPattern.test(eventTitle) && event.markets) {
+            const isEarnings = question.includes('earnings') ||
+                              question.includes('beat') ||
+                              question.includes('eps');
 
-          if (isEarnings) {
-            const parsed = parseMarket(market);
-            // Avoid duplicates
-            if (!markets.find(m => m.id === parsed.id)) {
-              markets.push(parsed);
+            if (isEarnings) {
+              for (const market of event.markets) {
+                if (market.closed && !markets.find(m => m.id === market.id)) {
+                  markets.push(parseMarket(market));
+                }
+              }
             }
           }
         }
       }
     }
 
-    // Sort by end date (most recent first)
+    // Sort by end date (most recent first) and return
     return markets.sort((a, b) => {
       const dateA = new Date(a.endDate).getTime();
       const dateB = new Date(b.endDate).getTime();
