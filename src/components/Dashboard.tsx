@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ParsedMarket, RetailerName, RETAILER_COLORS } from '@/types/market';
 import { RetailerSection, RetailerCompact } from './RetailerSection';
 import { MarketCard, MarketCardSkeleton } from './MarketCard';
-import { StatCard, MarketCountChart } from './PriceChart';
+import { StatCard, MarketCountChart, VolumeChart } from './PriceChart';
 import { StockTicker } from './StockTicker';
 import { WalmartEarnings } from './WalmartEarnings';
 import { formatVolume, hasSignificantMovement } from '@/lib/polymarket';
@@ -40,7 +40,7 @@ function TitleInfoPopup({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           </button>
         </div>
         <p className="text-gray-700 leading-relaxed">
-          Polymarket Prediction market data aggregates collective beliefs, offering signals that improve forecasting, decision-making, and risk management.
+          Polymarket prediction market data aggregates collective beliefs, offering signals that improve forecasting, decision-making, and risk management.
         </p>
         <button
           onClick={onClose}
@@ -274,14 +274,22 @@ export function Dashboard() {
               </section>
             )}
 
-            {/* Market Count Chart */}
-            <section className="mb-8">
+            {/* Charts Row */}
+            <section className="mb-8 grid md:grid-cols-2 gap-6">
               <MarketCountChart
                 data={[
                   { name: 'Walmart', count: data?.retailers.walmart.length || 0, color: RETAILER_COLORS.walmart },
                   { name: 'Amazon', count: data?.retailers.amazon.length || 0, color: RETAILER_COLORS.amazon },
                   { name: 'Costco', count: data?.retailers.costco.length || 0, color: RETAILER_COLORS.costco },
                   { name: 'Target', count: data?.retailers.target.length || 0, color: RETAILER_COLORS.target },
+                ]}
+              />
+              <VolumeChart
+                data={[
+                  { name: 'Walmart', volume: data?.retailers.walmart.reduce((sum, m) => sum + m.volume, 0) || 0, color: RETAILER_COLORS.walmart },
+                  { name: 'Amazon', volume: data?.retailers.amazon.reduce((sum, m) => sum + m.volume, 0) || 0, color: RETAILER_COLORS.amazon },
+                  { name: 'Costco', volume: data?.retailers.costco.reduce((sum, m) => sum + m.volume, 0) || 0, color: RETAILER_COLORS.costco },
+                  { name: 'Target', volume: data?.retailers.target.reduce((sum, m) => sum + m.volume, 0) || 0, color: RETAILER_COLORS.target },
                 ]}
               />
             </section>

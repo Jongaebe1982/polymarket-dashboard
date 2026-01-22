@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchRetailerMarkets, fetchEarningsMarkets, fetchPriceHistory } from '@/lib/polymarket';
+import { fetchRetailerMarkets, fetchEarningsMarkets, fetchPriceHistory, fetchResolvedWalmartEarnings } from '@/lib/polymarket';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60; // Revalidate every 60 seconds
@@ -18,6 +18,11 @@ export async function GET(request: Request) {
     if (type === 'earnings') {
       const earnings = await fetchEarningsMarkets();
       return NextResponse.json({ earnings });
+    }
+
+    if (type === 'resolved-walmart-earnings') {
+      const markets = await fetchResolvedWalmartEarnings();
+      return NextResponse.json({ markets });
     }
 
     // Default: fetch retailer markets

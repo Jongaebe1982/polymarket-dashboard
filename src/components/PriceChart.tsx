@@ -314,6 +314,53 @@ export function MarketCountChart({ data, height = 300 }: MarketCountChartProps) 
   );
 }
 
+// Volume chart for retailers (in dollars)
+interface VolumeChartProps {
+  data: { name: string; volume: number; color: string }[];
+  height?: number;
+}
+
+function formatVolumeLabel(volume: number): string {
+  if (volume >= 1_000_000) {
+    return `$${(volume / 1_000_000).toFixed(2)}M`;
+  }
+  if (volume >= 1_000) {
+    return `$${(volume / 1_000).toFixed(1)}K`;
+  }
+  return `$${volume.toFixed(0)}`;
+}
+
+export function VolumeChart({ data, height = 300 }: VolumeChartProps) {
+  const maxVolume = Math.max(...data.map(d => d.volume), 1);
+
+  return (
+    <div className="w-full bg-white rounded-xl border border-gray-200 p-4" style={{ minHeight: height }}>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Total Retail Volume by Company</h3>
+      <div className="space-y-4">
+        {data.map(({ name, volume, color }) => (
+          <div key={name} className="flex items-center gap-3">
+            <div className="w-24 text-sm font-medium text-gray-700">{name}</div>
+            <div className="flex-1 h-10 bg-gray-100 rounded-lg overflow-hidden relative">
+              <div
+                className="h-full transition-all duration-500 rounded-lg flex items-center justify-end pr-3"
+                style={{
+                  width: `${Math.max((volume / maxVolume) * 100, 10)}%`,
+                  backgroundColor: color,
+                }}
+              >
+                <span className="text-sm font-bold text-white drop-shadow">
+                  {formatVolumeLabel(volume)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500 mt-4">Combined trading volume across all active markets per retailer</p>
+    </div>
+  );
+}
+
 // Summary stat card
 interface StatCardProps {
   title: string;

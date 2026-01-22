@@ -318,6 +318,53 @@ export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
     .slice(0, 25);
 }
 
+// Fetch resolved Walmart earnings markets (for when no active markets exist)
+export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
+  try {
+    // Fetch closed/resolved events with Stocks tag
+    const response = await fetch(
+      `${GAMMA_API_BASE}/events?tag_id=604&closed=true&limit=50`
+    );
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch resolved events: ${response.status}`);
+      return [];
+    }
+
+    const events: Event[] = await response.json();
+
+    // Filter for Walmart earnings markets
+    const walmartPattern = /\bWMT\b|\bWalmart\b/i;
+    const earningsKeywords = ['earnings', 'revenue', 'eps', 'quarterly', 'q1', 'q2', 'q3', 'q4', 'fiscal', 'beat', 'guidance'];
+
+    const markets: ParsedMarket[] = [];
+    for (const event of events) {
+      const eventTitle = event.title || '';
+
+      if (walmartPattern.test(eventTitle) && event.markets) {
+        for (const market of event.markets) {
+          const question = market.question.toLowerCase();
+          const isEarnings = earningsKeywords.some(kw => question.includes(kw));
+
+          if (isEarnings) {
+            markets.push(parseMarket(market));
+          }
+        }
+      }
+    }
+
+    // Sort by end date (most recent first)
+    return markets.sort((a, b) => {
+      const dateA = new Date(a.endDate).getTime();
+      const dateB = new Date(b.endDate).getTime();
+      return dateB - dateA;
+    });
+  } catch (error) {
+    console.warn('Error fetching resolved Walmart earnings:', error);
+    return [];
+  }
+}
+
 // Fetch price history for a market token (minimum 5 days)
 export async function fetchPriceHistory(tokenId: string): Promise<PriceHistoryPoint[]> {
   try {
