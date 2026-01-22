@@ -151,9 +151,8 @@ function WalmartStockChart() {
   useEffect(() => {
     const fetchStockData = async () => {
       try {
-        const fiveDaysAgo = Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000);
-        const now = Math.floor(Date.now() / 1000);
-        const response = await fetch(`/api/stocks/history?retailer=walmart&startTs=${fiveDaysAgo}&endTs=${now}`);
+        // Use range=5d for reliable 5-day data from Yahoo Finance
+        const response = await fetch(`/api/stocks/history?retailer=walmart&range=5d`);
         const data = await response.json();
         if (data.history) {
           setStockHistory(data.history);
@@ -303,9 +302,8 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
           setHistory(historyData.history);
         }
 
-        const fiveDaysAgo = Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000);
-        const now = Math.floor(Date.now() / 1000);
-        const stockRes = await fetch(`/api/stocks/history?retailer=walmart&startTs=${fiveDaysAgo}&endTs=${now}`);
+        // Use range=5d for reliable 5-day data from Yahoo Finance
+        const stockRes = await fetch(`/api/stocks/history?retailer=walmart&range=5d`);
         const stockData = await stockRes.json();
         if (stockData.history) {
           setStockHistory(stockData.history);

@@ -92,12 +92,10 @@ export function PriceChart({ market, height = 200, retailer: passedRetailer }: P
 
       setStockLoading(true);
       try {
-        // Use the same time range as the probability history
-        const startTs = Math.min(...history.map(h => h.timestamp));
-        const endTs = Math.max(...history.map(h => h.timestamp));
-
+        // Use range=5d for reliable data from Yahoo Finance
+        // The chart will match stock prices to probability timestamps
         const response = await fetch(
-          `/api/stocks/history?retailer=${retailer}&startTs=${startTs}&endTs=${endTs}`
+          `/api/stocks/history?retailer=${retailer}&range=5d`
         );
         const data = await response.json();
 

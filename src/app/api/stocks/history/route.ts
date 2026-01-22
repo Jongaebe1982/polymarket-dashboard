@@ -15,12 +15,12 @@ export interface StockHistoryPoint {
 
 async function fetchYahooFinanceHistory(
   symbol: string,
-  startTs: number,
-  endTs: number
+  range: string = '5d'
 ): Promise<StockHistoryPoint[]> {
   try {
-    // Yahoo Finance chart API with specific time range
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${startTs}&period2=${endTs}&interval=1h`;
+    // Yahoo Finance chart API with range parameter (more reliable than period1/period2 for intraday data)
+    // Using range=5d with 1h interval gives us good coverage for 5 trading days
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=1h`;
 
     const response = await fetch(url, {
       headers: {
@@ -64,8 +64,7 @@ async function fetchYahooFinanceHistory(
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const retailer = searchParams.get('retailer');
-  const startTs = searchParams.get('startTs');
-  const endTs = searchParams.get('endTs');
+  const range = searchParams.get('range') || '5d'; // Default to 5 days
 
   if (!retailer || !RETAIL_STOCKS[retailer]) {
     return NextResponse.json(
@@ -74,20 +73,14 @@ export async function GET(request: Request) {
     );
   }
 
-  // Default to 7 days if no time range provided
-  const now = Math.floor(Date.now() / 1000);
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60;
-
-  const start = startTs ? parseInt(startTs) : sevenDaysAgo;
-  const end = endTs ? parseInt(endTs) : now;
-
   const symbol = RETAIL_STOCKS[retailer];
-  const history = await fetchYahooFinanceHistory(symbol, start, end);
+  const history = await fetchYahooFinanceHistory(symbol, range);
 
   return NextResponse.json({
     symbol,
     retailer,
     history,
+    range,
     timestamp: new Date().toISOString(),
   });
 }
