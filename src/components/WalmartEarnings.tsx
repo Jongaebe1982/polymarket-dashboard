@@ -134,7 +134,147 @@ export function WalmartEarnings({ markets, loading }: WalmartEarningsProps) {
           </div>
         )}
       </section>
+
+      {/* Walmart Stock Price Chart - Show when no active markets */}
+      {earningsMarkets.length === 0 && (
+        <WalmartStockChart />
+      )}
     </div>
+  );
+}
+
+// Standalone Walmart stock price chart (5-day view)
+function WalmartStockChart() {
+  const [stockHistory, setStockHistory] = useState<{ timestamp: number; price: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStockData = async () => {
+      try {
+        const fiveDaysAgo = Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000);
+        const now = Math.floor(Date.now() / 1000);
+        const response = await fetch(`/api/stocks/history?retailer=walmart&startTs=${fiveDaysAgo}&endTs=${now}`);
+        const data = await response.json();
+        if (data.history) {
+          setStockHistory(data.history);
+        }
+      } catch (err) {
+        console.error('Failed to fetch stock data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStockData();
+  }, []);
+
+  const chartData = stockHistory.map(point => ({
+    time: point.timestamp * 1000,
+    price: point.price,
+    formattedTime: format(new Date(point.timestamp * 1000), 'MMM d'),
+  }));
+
+  const prices = chartData.map(d => d.price);
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : 100;
+  const currentPrice = prices.length > 0 ? prices[prices.length - 1] : 0;
+  const startPrice = prices.length > 0 ? prices[0] : 0;
+  const priceChange = currentPrice - startPrice;
+  const priceChangePercent = startPrice > 0 ? (priceChange / startPrice) * 100 : 0;
+
+  return (
+    <section>
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <span>📈</span> Walmart (WMT) Stock Price
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Last 5 days of trading activity
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center h-[350px]">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : stockHistory.length === 0 ? (
+          <div className="flex items-center justify-center h-[350px] text-gray-500">
+            Unable to load stock data
+          </div>
+        ) : (
+          <>
+            {/* Stock stats header */}
+            <div className="p-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Current Price</p>
+                  <p className="text-3xl font-bold" style={{ color: RETAILER_COLORS.walmart }}>
+                    ${currentPrice.toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">5-Day Change</p>
+                  <p className={`text-xl font-bold ${priceChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stock chart */}
+            <div className="p-4 h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                  <defs>
+                    <linearGradient id="stockGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={RETAILER_COLORS.walmart} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={RETAILER_COLORS.walmart} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="formattedTime"
+                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                  />
+                  <YAxis
+                    domain={[minPrice * 0.995, maxPrice * 1.005]}
+                    tick={{ fontSize: 11, fill: RETAILER_COLORS.walmart }}
+                    tickFormatter={(value) => `$${value.toFixed(0)}`}
+                    tickLine={false}
+                    axisLine={{ stroke: '#e5e7eb' }}
+                    width={55}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.[0]) return null;
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                          <p className="text-xs text-gray-500 mb-1">{format(new Date(data.time), 'MMM d, yyyy HH:mm')}</p>
+                          <p className="text-sm font-bold" style={{ color: RETAILER_COLORS.walmart }}>
+                            WMT: ${data.price.toFixed(2)}
+                          </p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke={RETAILER_COLORS.walmart}
+                    strokeWidth={2}
+                    fill="url(#stockGradient)"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
