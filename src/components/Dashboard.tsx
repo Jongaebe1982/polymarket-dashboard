@@ -125,29 +125,36 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 sticky top-0 z-10 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">📊</span>
-              <h1
-                onClick={() => setShowTitleInfo(true)}
-                className="text-xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
-                title="Click to learn more"
-              >
-                Polymarket Retail Dashboard
-              </h1>
+            <div
+              onClick={() => setShowTitleInfo(true)}
+              className="flex items-center gap-3 cursor-pointer group"
+              title="Click to learn more"
+            >
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-md group-hover:shadow-blue-500/40 transition-shadow">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white group-hover:text-blue-300 transition-colors">
+                  Polymarket Retail Dashboard
+                </h1>
+                <p className="text-xs text-blue-300/70 hidden sm:block">Prediction market intelligence</p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               {lastUpdated && (
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-blue-200/70 hidden sm:block">
                   Updated: {lastUpdated.toLocaleTimeString()}
                 </span>
               )}
               <button
                 onClick={fetchData}
                 disabled={loading}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 text-blue-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
                 title="Refresh data"
               >
                 <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -158,7 +165,7 @@ export function Dashboard() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 -mb-px overflow-x-auto">
+          <div className="flex gap-1 -mb-px overflow-x-auto border-t border-white/10 pt-1">
             {[
               { id: 'overview', label: 'Overview', icon: '📈' },
               { id: 'walmart-earnings', label: 'Walmart Earnings', icon: '🏪' },
@@ -170,8 +177,8 @@ export function Dashboard() {
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`px-4 py-3 text-sm font-medium transition-colors flex items-center gap-2 border-b-2 ${
                   activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-blue-400 text-white bg-white/5'
+                    : 'border-transparent text-blue-200/70 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <span>{tab.icon}</span>
