@@ -204,7 +204,7 @@ function MarketModal({ market, onClose }: { market: ParsedMarket; onClose: () =>
 
           {/* Action Button */}
           <a
-            href={`https://polymarket.com/event/${market.slug}`}
+            href={`https://polymarket.com/event/${market.eventSlug || market.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="block w-full text-center py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"

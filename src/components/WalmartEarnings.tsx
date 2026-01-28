@@ -466,7 +466,7 @@ function EarningsDashlet({ market }: { market: ParsedMarket }) {
 
       <div className="p-4 border-t border-gray-100">
         <a
-          href={`https://polymarket.com/event/${market.slug}`}
+          href={`https://polymarket.com/event/${market.eventSlug || market.slug}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block w-full text-center py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
@@ -606,7 +606,7 @@ function ResolvedMarketModal({ market, onClose }: { market: ParsedMarket; onClos
 
           {/* CTA button */}
           <a
-            href={`https://polymarket.com/event/${market.slug}`}
+            href={`https://polymarket.com/event/${market.eventSlug || market.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="block w-full text-center py-4 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"

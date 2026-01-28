@@ -4,7 +4,7 @@ const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 const CLOB_API_BASE = 'https://clob.polymarket.com';
 
 // Parse market data from API response
-export function parseMarket(market: Market): ParsedMarket {
+export function parseMarket(market: Market, eventSlug?: string): ParsedMarket {
   // Parse outcome prices (comes as JSON string array)
   let prices: number[] = [];
   try {
@@ -35,6 +35,7 @@ export function parseMarket(market: Market): ParsedMarket {
     id: market.id,
     question: market.question,
     slug: market.slug,
+    eventSlug: eventSlug || market.slug, // Use event slug if provided, otherwise fall back to market slug
     description: market.description || '',
     category: market.category || '',
     endDate: market.endDate,
@@ -226,7 +227,7 @@ export async function fetchRetailerMarkets(): Promise<{
         if (event.markets) {
           for (const market of event.markets) {
             if (market.active && !market.closed) {
-              result[retailer as RetailerName].push(parseMarket(market));
+              result[retailer as RetailerName].push(parseMarket(market, event.slug));
               processedEventIds.add(market.id);
             }
           }
@@ -306,7 +307,7 @@ export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
     if (event.markets) {
       for (const market of event.markets) {
         if (market.active && !market.closed) {
-          markets.push(parseMarket(market));
+          markets.push(parseMarket(market, event.slug));
         }
       }
     }
@@ -340,7 +341,7 @@ export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
           for (const market of event.markets) {
             // Only include closed markets
             if (market.closed) {
-              markets.push(parseMarket(market));
+              markets.push(parseMarket(market, event.slug));
             }
           }
         }
@@ -368,7 +369,7 @@ export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
             if (isEarnings) {
               for (const market of event.markets) {
                 if (market.closed && !markets.find(m => m.id === market.id)) {
-                  markets.push(parseMarket(market));
+                  markets.push(parseMarket(market, event.slug));
                 }
               }
             }

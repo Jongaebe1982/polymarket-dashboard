@@ -50,6 +50,7 @@ export interface ParsedMarket {
   id: string;
   question: string;
   slug: string;
+  eventSlug?: string; // The parent event's slug - use this for Polymarket URLs
   description: string;
   category: string;
   endDate: string;
