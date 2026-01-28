@@ -184,13 +184,27 @@ export function filterMarketsByKeyword(
   });
 }
 
-// Stock ticker patterns for retailers
+// Stock ticker patterns for retailers - used for matching event titles and market questions
 const STOCK_TICKERS: Record<RetailerName, RegExp> = {
   walmart: /\bWMT\b|\bWalmart\b/i,
-  amazon: /\bAMZN\b|\bAmazon\s*\(AMZN\)/i,
+  amazon: /\bAMZN\b|\bAmazon\b/i,
   costco: /\bCOST\b|\bCostco\b/i,
-  target: /\bTGT\b|\bTarget\s*\(TGT\)/i,
+  target: /\bTGT\b|\bTarget\b/i,
 };
+
+// Helper to check if text matches a retailer (with exclusion filtering)
+function matchesRetailer(text: string, retailer: RetailerName): boolean {
+  const pattern = STOCK_TICKERS[retailer];
+  if (!pattern.test(text)) return false;
+
+  // Check exclusion patterns
+  const exclusions = EXCLUSION_PATTERNS[retailer];
+  if (exclusions.some(exclusion => exclusion.test(text))) {
+    return false;
+  }
+
+  return true;
+}
 
 // Get markets for all retailers
 export async function fetchRetailerMarkets(): Promise<{
@@ -203,8 +217,8 @@ export async function fetchRetailerMarkets(): Promise<{
   // Fetch stock events using the Stocks tag (more reliable than general search)
   const [stockEvents, generalMarkets, generalEvents] = await Promise.all([
     fetchStockEvents(),
-    fetchMarkets(200, 0),
-    fetchEvents(200, 0),
+    fetchMarkets(500, 0), // Increased limit to capture more markets
+    fetchEvents(500, 0),  // Increased limit to capture more events
   ]);
 
   const result = {
@@ -215,75 +229,76 @@ export async function fetchRetailerMarkets(): Promise<{
     other: [] as ParsedMarket[],
   };
 
-  // Process stock events - these contain the actual stock market predictions
-  const processedEventIds = new Set<string>();
+  const processedMarketIds = new Set<string>();
+
+  // Process stock events - check both event title AND individual market questions
   for (const event of stockEvents) {
     const eventTitle = event.title || '';
 
-    // Check which retailer this event belongs to
-    for (const [retailer, pattern] of Object.entries(STOCK_TICKERS)) {
-      if (pattern.test(eventTitle)) {
-        // Add all markets from this event
-        if (event.markets) {
-          for (const market of event.markets) {
-            if (market.active && !market.closed) {
-              result[retailer as RetailerName].push(parseMarket(market, event.slug));
-              processedEventIds.add(market.id);
-            }
+    if (event.markets) {
+      for (const market of event.markets) {
+        if (!market.active || market.closed) continue;
+
+        const marketText = `${eventTitle} ${market.question} ${market.description || ''}`;
+
+        // Check which retailer this market belongs to
+        for (const retailer of ['walmart', 'amazon', 'costco', 'target'] as RetailerName[]) {
+          if (matchesRetailer(marketText, retailer)) {
+            result[retailer].push(parseMarket(market, event.slug));
+            processedMarketIds.add(market.id);
+            break;
           }
         }
+      }
+    }
+  }
+
+  // Process general events - check event title and market questions
+  for (const event of generalEvents as unknown as Event[]) {
+    if (!event.markets) continue;
+
+    const eventTitle = event.title || '';
+
+    for (const market of event.markets) {
+      if (!market.active || market.closed || processedMarketIds.has(market.id)) continue;
+
+      const marketText = `${eventTitle} ${market.question} ${market.description || ''}`;
+
+      for (const retailer of ['walmart', 'amazon', 'costco', 'target'] as RetailerName[]) {
+        if (matchesRetailer(marketText, retailer)) {
+          result[retailer].push(parseMarket(market, event.slug));
+          processedMarketIds.add(market.id);
+          break;
+        }
+      }
+    }
+  }
+
+  // Also check general markets (these come without event context)
+  for (const market of generalMarkets) {
+    if (!market.active || market.closed || processedMarketIds.has(market.id)) continue;
+
+    const marketText = `${market.question} ${market.description || ''}`;
+
+    for (const retailer of ['walmart', 'amazon', 'costco', 'target'] as RetailerName[]) {
+      if (matchesRetailer(marketText, retailer)) {
+        result[retailer].push(parseMarket(market));
+        processedMarketIds.add(market.id);
         break;
       }
     }
   }
 
-  // Also check general markets for non-stock retail mentions (e.g., "Will Walmart acquire TikTok")
-  const allMarketsMap = new Map<string, Market>();
-  [...generalMarkets, ...generalEvents].forEach(m => {
-    if (!processedEventIds.has(m.id)) {
-      allMarketsMap.set(m.id, m);
-    }
-  });
-  const allMarkets = Array.from(allMarketsMap.values());
-
-  for (const market of allMarkets) {
-    const parsed = parseMarket(market);
-    let categorized = false;
-
-    for (const [retailer, keywords] of Object.entries(RETAILER_KEYWORDS)) {
-      const matchedMarkets = filterMarketsByKeyword([market], keywords, retailer as RetailerName);
-      if (matchedMarkets.length > 0) {
-        result[retailer as RetailerName].push(parsed);
-        categorized = true;
-        break;
-      }
-    }
-
-    // Add to "other" ONLY for actual company earnings markets (strict filtering)
-    if (!categorized) {
-      const question = market.question.toLowerCase();
-      const category = (market.category || '').toLowerCase();
-      // Must be in a financial category AND contain earnings-specific keywords
-      const isFinancialCategory = category.includes('finance') ||
-                                  category.includes('stocks') ||
-                                  category.includes('equities') ||
-                                  category.includes('economics');
-      // Must contain explicit earnings language with company context
-      const hasEarningsContext = (
-        (question.includes('earnings') && (question.includes('beat') || question.includes('q1') || question.includes('q2') || question.includes('q3') || question.includes('q4') || question.includes('quarter'))) ||
-        (question.includes('eps') && /\$?\d/.test(question)) ||
-        (question.includes('revenue') && /\$?\d|billion|million/.test(question)) ||
-        /\b(AAPL|GOOGL|GOOG|MSFT|AMZN|META|NVDA|TSLA|NFLX|AMD|INTC|JPM|BAC|GS|V|MA)\b/.test(market.question)
-      );
-      if (isFinancialCategory && hasEarningsContext) {
-        result.other.push(parsed);
-      }
-    }
-  }
-
-  // Sort each retailer's markets by volume
+  // Sort each retailer's markets by volume and deduplicate
   for (const retailer of Object.keys(result) as (keyof typeof result)[]) {
-    result[retailer].sort((a, b) => b.volume - a.volume);
+    // Deduplicate by market ID
+    const uniqueMarkets = new Map<string, ParsedMarket>();
+    for (const market of result[retailer]) {
+      if (!uniqueMarkets.has(market.id)) {
+        uniqueMarkets.set(market.id, market);
+      }
+    }
+    result[retailer] = Array.from(uniqueMarkets.values()).sort((a, b) => b.volume - a.volume);
   }
 
   return result;

@@ -85,9 +85,9 @@ export type RetailerName = 'walmart' | 'amazon' | 'costco' | 'target';
 // Primary keywords that strongly indicate the company
 export const RETAILER_KEYWORDS: Record<RetailerName, string[]> = {
   walmart: ['walmart', 'wmt'],
-  amazon: ['amzn'], // Only stock ticker to avoid "Amazon MGM Studios" etc.
-  costco: ['costco', 'cost'],
-  target: ['tgt'], // Only stock ticker to avoid "target" in other contexts
+  amazon: ['amzn', 'amazon'], // Include "amazon" - we'll filter out false positives with exclusions
+  costco: ['costco'], // Removed 'cost' - too many false positives (e.g., "Will X cost $100?")
+  target: ['tgt', 'target'], // Include "target" - we'll filter out false positives with exclusions
 };
 
 // Additional contextual keywords that must appear with company name
@@ -99,9 +99,22 @@ export const RETAILER_CONTEXT_KEYWORDS = [
 // Exclude patterns - if these appear near the keyword, it's likely a false positive
 export const EXCLUSION_PATTERNS: Record<RetailerName, RegExp[]> = {
   walmart: [], // Walmart is pretty unambiguous
-  amazon: [/amazon\s+mgm/i, /amazon\s+river/i, /amazon\s+rainforest/i, /amazon\s+forest/i],
+  amazon: [
+    /amazon\s+mgm/i,
+    /amazon\s+river/i,
+    /amazon\s+rainforest/i,
+    /amazon\s+forest/i,
+    /amazon\s+prime\s+video/i,
+    /amazon\s+studios/i,
+  ],
   costco: [],
-  target: [/target\s+(range|rate|area|zone|strike|military|attack|bombing)/i, /federal\s+funds?\s+target/i],
+  target: [
+    /target\s+(range|rate|area|zone|strike|military|attack|bombing|price|audience|demographic)/i,
+    /federal\s+funds?\s+target/i,
+    /inflation\s+target/i,
+    /price\s+target/i,
+    /\btarget(s|ed|ing)?\s+(of|by|at|for)\b/i, // "targets of", "targeted by", etc.
+  ],
 };
 
 export const RETAILER_COLORS: Record<RetailerName, string> = {
