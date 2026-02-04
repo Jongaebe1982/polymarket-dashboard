@@ -342,8 +342,9 @@ export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
 
     // Use Earnings tag (id=1013) with order by endDate descending to find recent resolved markets
     // This is the most reliable way to find Walmart earnings markets
+    // Include closed=true to fetch resolved (closed) markets
     const earningsResponse = await fetch(
-      `${GAMMA_API_BASE}/events?tag_id=1013&order=endDate&ascending=false&limit=200`
+      `${GAMMA_API_BASE}/events?tag_id=1013&order=endDate&ascending=false&limit=200&closed=true`
     );
 
     if (earningsResponse.ok) {
@@ -366,7 +367,7 @@ export async function fetchResolvedWalmartEarnings(): Promise<ParsedMarket[]> {
     // Also try with Stocks tag as fallback
     if (markets.length === 0) {
       const stocksResponse = await fetch(
-        `${GAMMA_API_BASE}/events?tag_id=604&order=endDate&ascending=false&limit=200`
+        `${GAMMA_API_BASE}/events?tag_id=604&order=endDate&ascending=false&limit=200&closed=true`
       );
 
       if (stocksResponse.ok) {
