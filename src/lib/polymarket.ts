@@ -106,8 +106,17 @@ const TAG_IDS = {
   STOCKS: '604',
   FINANCE: '120',
   EQUITIES: '102676',
+  EARNINGS: '1013',
   // Specific ticker tags (found via API exploration)
   AMZN: '102681',
+};
+
+// Tag slugs for retailer-specific markets (more reliable than generic STOCKS tag)
+const RETAILER_TAG_SLUGS: Record<RetailerName, string> = {
+  walmart: 'wmt',
+  amazon: 'amzn',
+  costco: 'cost',
+  target: 'tgt',
 };
 
 // Fetch events by tag ID (e.g., for stocks)
@@ -128,6 +137,25 @@ export async function fetchEventsByTag(tagId: string, limit = 200): Promise<Even
   return response.json();
 }
 
+// Fetch events by tag slug (e.g., 'wmt', 'amzn', 'earnings')
+export async function fetchEventsByTagSlug(tagSlug: string, limit = 100): Promise<Event[]> {
+  const params = new URLSearchParams({
+    tag_slug: tagSlug,
+    active: 'true',
+    closed: 'false',
+    limit: limit.toString(),
+  });
+
+  const response = await fetch(`${GAMMA_API_BASE}/events?${params}`);
+
+  if (!response.ok) {
+    console.warn(`Failed to fetch events by tag slug ${tagSlug}: ${response.status}`);
+    return [];
+  }
+
+  return response.json();
+}
+
 // Fetch events for a specific ticker by slug
 export async function fetchEventsBySlugPattern(pattern: string): Promise<Event[]> {
   // Fetch events and filter by slug pattern
@@ -143,15 +171,29 @@ export async function fetchEventsBySlugPattern(pattern: string): Promise<Event[]
 
 // Fetch all stock market events including specific tickers
 export async function fetchStockEvents(): Promise<Event[]> {
-  // Fetch from specific ticker tags for more accurate results
-  const [amznEvents, stockEvents] = await Promise.all([
+  // Fetch from multiple sources for comprehensive coverage:
+  // 1. Retailer-specific tag slugs (wmt, amzn, cost, tgt) - most reliable for specific retailers
+  // 2. Generic STOCKS tag as fallback
+  // 3. AMZN tag ID for historical compatibility
+  const [
+    wmtEvents,
+    amznSlugEvents,
+    costEvents,
+    tgtEvents,
+    amznTagEvents,
+    stockEvents,
+  ] = await Promise.all([
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.walmart, 100),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.amazon, 100),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.costco, 100),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.target, 100),
     fetchEventsByTag(TAG_IDS.AMZN, 50),
     fetchEventsByTag(TAG_IDS.STOCKS, 500),
   ]);
 
   // Combine and deduplicate
   const eventMap = new Map<string, Event>();
-  [...amznEvents, ...stockEvents].forEach(e => {
+  [...wmtEvents, ...amznSlugEvents, ...costEvents, ...tgtEvents, ...amznTagEvents, ...stockEvents].forEach(e => {
     eventMap.set(e.id, e);
   });
 
@@ -306,30 +348,59 @@ export async function fetchRetailerMarkets(): Promise<{
 
 // Fetch earnings markets directly from Polymarket's earnings category
 export async function fetchEarningsMarkets(): Promise<ParsedMarket[]> {
-  // Use tag_slug=earnings to get markets from the official earnings category
-  const response = await fetch(`${GAMMA_API_BASE}/events?tag_slug=earnings&active=true&closed=false&limit=50`);
+  // Fetch from multiple sources to ensure comprehensive coverage:
+  // 1. Official earnings tag_slug
+  // 2. Earnings tag_id (1013)
+  // 3. Retailer-specific tag slugs (many earnings markets are tagged by ticker)
+  const [earningsSlugResponse, earningsTagResponse, wmtEvents, amznEvents, costEvents, tgtEvents] = await Promise.all([
+    fetch(`${GAMMA_API_BASE}/events?tag_slug=earnings&active=true&closed=false&limit=100`),
+    fetch(`${GAMMA_API_BASE}/events?tag_id=${TAG_IDS.EARNINGS}&active=true&closed=false&limit=100`),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.walmart, 50),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.amazon, 50),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.costco, 50),
+    fetchEventsByTagSlug(RETAILER_TAG_SLUGS.target, 50),
+  ]);
 
-  if (!response.ok) {
-    console.warn(`Failed to fetch earnings events: ${response.status}`);
-    return [];
+  const allEvents: Event[] = [];
+
+  if (earningsSlugResponse.ok) {
+    const events: Event[] = await earningsSlugResponse.json();
+    allEvents.push(...events);
   }
 
-  const events: Event[] = await response.json();
+  if (earningsTagResponse.ok) {
+    const events: Event[] = await earningsTagResponse.json();
+    allEvents.push(...events);
+  }
 
-  // Extract active markets from events
-  const markets: ParsedMarket[] = [];
-  for (const event of events) {
+  // Add retailer events (filter for earnings-related ones below)
+  allEvents.push(...wmtEvents, ...amznEvents, ...costEvents, ...tgtEvents);
+
+  // Deduplicate events by ID
+  const eventMap = new Map<string, Event>();
+  allEvents.forEach(e => eventMap.set(e.id, e));
+
+  // Pattern to identify earnings markets
+  const earningsPattern = /\b(earnings|eps|quarterly|revenue|beat|guidance|q[1-4]|fiscal)\b/i;
+
+  // Extract active earnings markets from events
+  const marketMap = new Map<string, ParsedMarket>();
+  for (const event of eventMap.values()) {
     if (event.markets) {
       for (const market of event.markets) {
-        if (market.active && !market.closed) {
-          markets.push(parseMarket(market, event.slug));
+        if (market.active && !market.closed && !marketMap.has(market.id)) {
+          // Check if it's an earnings-related market
+          const searchText = `${event.title || ''} ${market.question}`;
+          if (earningsPattern.test(searchText)) {
+            marketMap.set(market.id, parseMarket(market, event.slug));
+          }
         }
       }
     }
   }
 
   // Sort by volume and return top 25
-  return markets
+  return Array.from(marketMap.values())
     .sort((a, b) => b.volume - a.volume)
     .slice(0, 25);
 }
